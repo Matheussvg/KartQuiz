@@ -1,12 +1,14 @@
 # Kart Quiz
 
-Corrida de kart multiplayer no navegador. Um aluno cria a sala, os outros entram com o código,
-quem criou dá a largada. 3 voltas numa pista pequena. Passar por uma caixa "?" abre uma pergunta
-de controle de qualidade para todo mundo ao mesmo tempo:
+Corrida de kart 3D multiplayer no navegador. Um aluno cria a sala, os outros entram com o
+código, quem criou dá a largada. Todos largam juntos em grid de 2 colunas. 5 voltas, pista larga
+com barreiras nas laterais.
 
-- quem acerta primeiro ganha 3 segundos de impulso
-- quem erra ou deixa o tempo acabar volta um trecho da pista
-- quem acerta mas não foi o primeiro só continua
+- **Caixa "?"** dá um raio. Espaço (ou o botão ⚡ no celular) derruba quem está imediatamente
+  na sua frente — o kart dele roda e fica parado ~1 segundo. Só dá para carregar um raio por vez.
+- **Carta de pergunta** (ás de espadas) aparece na tela de todos a cada 15 segundos de corrida.
+  Enquanto a carta está aberta o kart fica parado. Acertou, a carta some na hora e você segue.
+  Errou ou deixou os 12 segundos passarem, volta um trecho da pista.
 
 ## Rodar (precisa do Node.js 18 ou mais novo)
 
@@ -33,12 +35,24 @@ Estão em `questions.js`. Cada uma tem `q` (texto), `options` (4 alternativas) e
 ## Ajustes rápidos (server.js)
 
 - `LAPS` — número de voltas
-- `QUESTION_TIME` — segundos para responder (em ms)
+- `QUESTION_INTERVAL` — intervalo entre cartas (em ms)
+- `QUESTION_TIME` — tempo para responder a carta (em ms)
 - `BOX_RESPAWN` — tempo até a caixa reaparecer
+- `HIT_TIME` — quanto tempo o derrubado fica rodando
 
-No `public/index.html`, `CTRL` são os pontos que desenham a pista — mova-os para mudar o traçado.
+No `public/index.html`: `SCALE` muda o tamanho da pista, `HALF` a largura, `CTRL` são os pontos
+que desenham o traçado. Os números `90` e `46` em `camGoal` são distância e altura da câmera.
 
-## Colocar na internet (opcional)
+## Publicar (Netlify + Render)
 
-Se quiser que funcione fora da sala de aula, o projeto sobe sem alteração em serviços como
-Render, Railway ou Glitch: crie um app Node, aponte para este repositório e use `npm start`.
+O Netlify só hospeda a parte estática (o jogo). O servidor precisa rodar em outro lugar.
+
+1. Suba o projeto no GitHub.
+2. **Render** (render.com): New → Web Service → conecte o repositório. Build: `npm install`.
+   Start: `npm start`. Plano Free. Anote o endereço, tipo `kart-quiz.onrender.com`.
+3. Abra `public/index.html` e preencha `const SERVER = "kart-quiz.onrender.com";` (sem https://).
+4. **Netlify**: New site → mesmo repositório. O `netlify.toml` já aponta para a pasta `public`.
+5. Compartilhe o link do Netlify com os alunos.
+
+No plano grátis do Render o servidor dorme após 15 min parado e leva ~40 s para acordar.
+Abra o link uns minutos antes da aula.

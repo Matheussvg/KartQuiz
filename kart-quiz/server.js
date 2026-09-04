@@ -9,10 +9,12 @@ const { WebSocketServer } = require("ws");
 const QUESTIONS = require("./questions");
 
 const PORT = process.env.PORT || 3000;
-const LAPS = 3;
-const QUESTION_TIME = 12000;   // ms para responder
-const BOX_RESPAWN = 8000;      // ms até a caixa voltar
-const N_BOXES = 3;
+const LAPS = 5;
+const QUESTION_TIME = 12000;       // ms para responder a carta
+const QUESTION_INTERVAL = 15000;   // ms entre uma carta e outra
+const BOX_RESPAWN = 8000;          // ms até a caixa voltar
+const N_BOXES = 6;
+const HIT_TIME = 1300;             // ms que o atingido fica rodando
 const COLORS = ["#ff4d4d", "#3d8bff", "#3ac569", "#ffc857", "#b46cff", "#ff8c42", "#2ed3d3", "#ff6bd6"];
 
 const app = express();
@@ -36,7 +38,7 @@ function broadcast(room, msg) { for (const p of room.players.values()) send(p.ws
 function playerList(room) {
   return [...room.players.values()].map(p => ({
     id: p.id, name: p.name, color: p.color, host: p.id === room.hostId,
-    x: p.x, y: p.y, angle: p.angle, lap: p.lap, prog: p.prog, finished: p.finished, rank: p.rank, boost: p.boost,
+    x: p.x, y: p.y, angle: p.angle, lap: p.lap, prog: p.prog, finished: p.finished, rank: p.rank, boost: p.boost, item: p.item,
   }));
 }
 
@@ -44,7 +46,7 @@ function createRoom(ws, name) {
   const room = {
     code: code4(), hostId: null, players: new Map(), state: "lobby",
     boxes: Array.from({ length: N_BOXES }, () => ({ available: true })),
-    question: null, usedQuestions: [], finishOrder: [], endTimer: null,
+    question: null, usedQuestions: [], finishOrder: [], endTimer: null, cardTimer: null,
   };
   rooms.set(room.code, room);
   joinRoom(ws, room, name, true);
@@ -53,7 +55,7 @@ function createRoom(ws, name) {
 function joinRoom(ws, room, name, isHost) {
   const p = {
     id: nextId++, ws, name: (name || "Piloto").slice(0, 16), color: COLORS[room.players.size % COLORS.length],
-    x: 0, y: 0, angle: 0, lap: 1, prog: 0, finished: false, rank: 0, boost: false, room,
+    x: 0, y: 0, angle: 0, lap: 1, prog: 0, finished: false, rank: 0, boost: false, item: false, room,
   };
   room.players.set(p.id, p);
   if (isHost) room.hostId = p.id;
@@ -65,10 +67,15 @@ function joinRoom(ws, room, name, isHost) {
 function startRace(room) {
   room.state = "countdown";
   room.finishOrder = [];
-  for (const p of room.players.values()) { p.lap = 1; p.prog = 0; p.finished = false; p.rank = 0; p.boost = false; }
+  for (const p of room.players.values()) { p.lap = 1; p.prog = 0; p.finished = false; p.rank = 0; p.boost = false; p.item = false; }
+  clearInterval(room.cardTimer); room.cardTimer = null;
   for (const b of room.boxes) b.available = true;
   broadcast(room, { type: "countdown", players: playerList(room) });
-  setTimeout(() => { if (room.state === "countdown") { room.state = "racing"; broadcast(room, { type: "go" }); } }, 3500);
+  setTimeout(() => {
+    if (room.state !== "countdown") return;
+    room.state = "racing"; broadcast(room, { type: "go" });
+    room.cardTimer = setInterval(() => { if (room.state === "racing" && !room.question) openQuestion(room); }, QUESTION_INTERVAL);
+  }, 3500);
 }
 
 function pickQuestion(room) {
@@ -79,16 +86,10 @@ function pickQuestion(room) {
   return QUESTIONS[i];
 }
 
-function openQuestion(room, trigger, boxIdx) {
+function openQuestion(room) {
   const q = pickQuestion(room);
-  room.state = "question";
-  room.question = { q, winnerId: null, answers: new Map(), deadline: Date.now() + QUESTION_TIME, timer: null };
-  room.boxes[boxIdx].available = false;
-  setTimeout(() => { room.boxes[boxIdx].available = true; broadcast(room, { type: "box", idx: boxIdx, available: true }); }, BOX_RESPAWN);
-  broadcast(room, { type: "box", idx: boxIdx, available: false });
-  broadcast(room, {
-    type: "question", trigger: trigger.name, text: q.q, options: q.options, deadline: room.question.deadline,
-  });
+  room.question = { q, answers: new Map(), deadline: Date.now() + QUESTION_TIME, timer: null };
+  broadcast(room, { type: "question", text: q.q, options: q.options, deadline: room.question.deadline });
   room.question.timer = setTimeout(() => closeQuestion(room), QUESTION_TIME + 300);
 }
 
@@ -97,18 +98,21 @@ function closeQuestion(room) {
   if (!qs) return;
   clearTimeout(qs.timer);
   room.question = null;
-  room.state = "racing";
-  const results = {};
-  for (const p of room.players.values()) {
-    if (p.finished) continue;
-    const a = qs.answers.get(p.id);
-    results[p.id] = a === undefined ? "none" : (a ? "right" : "wrong");
+  broadcast(room, { type: "question_end", correct: qs.q.options[qs.q.answer] });
+}
+
+function useItem(room, p) {
+  if (!p.item || room.state !== "racing" || p.finished) return;
+  p.item = false;
+  const score = x => x.lap * 100000 + x.prog;
+  const mine = score(p);
+  let target = null;
+  for (const x of room.players.values()) {
+    if (x === p || x.finished) continue;
+    if (score(x) > mine && (!target || score(x) < score(target))) target = x;
   }
-  const winner = qs.winnerId ? room.players.get(qs.winnerId) : null;
-  broadcast(room, {
-    type: "question_end", winnerId: qs.winnerId, winnerName: winner ? winner.name : null,
-    correct: qs.q.options[qs.q.answer], results,
-  });
+  if (!target) return send(p.ws, { type: "item_miss" });
+  broadcast(room, { type: "hit", id: target.id, name: target.name, by: p.name, duration: HIT_TIME });
 }
 
 function handleFinish(room, p) {
@@ -125,6 +129,7 @@ function handleFinish(room, p) {
 function endRace(room) {
   if (room.state === "results") return;
   clearTimeout(room.endTimer); room.endTimer = null;
+  clearInterval(room.cardTimer); room.cardTimer = null;
   if (room.question) closeQuestion(room);
   room.state = "results";
   const ranked = [...room.players.values()].sort((a, b) => {
@@ -160,24 +165,28 @@ wss.on("connection", ws => {
 
     if (m.type === "pickup" && room.state === "racing" && !p.finished) {
       const b = room.boxes[m.idx];
-      if (b && b.available) openQuestion(room, p, m.idx);
+      if (!b || !b.available || p.item) return;
+      b.available = false; p.item = true;
+      broadcast(room, { type: "box", idx: m.idx, available: false });
+      send(ws, { type: "item" });
+      setTimeout(() => { b.available = true; broadcast(room, { type: "box", idx: m.idx, available: true }); }, BOX_RESPAWN);
       return;
     }
+
+    if (m.type === "use_item") return useItem(room, p);
 
     if (m.type === "answer" && room.question && !p.finished) {
       const qs = room.question;
       if (qs.answers.has(p.id)) return;
       const ok = m.idx === qs.q.answer;
       qs.answers.set(p.id, ok);
-      if (ok && !qs.winnerId) { qs.winnerId = p.id; broadcast(room, { type: "first_correct", id: p.id, name: p.name }); }
-      send(ws, { type: "answer_result", ok });
-      const alive = [...room.players.values()].filter(x => !x.finished).length;
-      if (qs.answers.size >= alive) closeQuestion(room);
+      send(ws, { type: "answer_result", ok, correct: qs.q.options[qs.q.answer] });
       return;
     }
 
     if (m.type === "back_to_lobby" && p.id === room.hostId) {
       room.state = "lobby";
+      clearInterval(room.cardTimer); room.cardTimer = null;
       for (const x of room.players.values()) { x.lap = 1; x.prog = 0; x.finished = false; x.rank = 0; }
       broadcast(room, { type: "lobby", players: playerList(room), state: "lobby" });
     }
@@ -187,20 +196,16 @@ wss.on("connection", ws => {
     const p = ws.player; if (!p) return;
     const room = p.room;
     room.players.delete(p.id);
-    if (room.players.size === 0) { clearTimeout(room.endTimer); rooms.delete(room.code); return; }
+    if (room.players.size === 0) { clearTimeout(room.endTimer); clearInterval(room.cardTimer); rooms.delete(room.code); return; }
     if (room.hostId === p.id) room.hostId = room.players.keys().next().value;
     broadcast(room, { type: "lobby", players: playerList(room), state: room.state, left: p.name });
-    if (room.question) {
-      const alive = [...room.players.values()].filter(x => !x.finished).length;
-      if (room.question.answers.size >= alive) closeQuestion(room);
-    }
   });
 });
 
 // Snapshot de posições 20x por segundo
 setInterval(() => {
   for (const room of rooms.values()) {
-    if (room.state !== "racing" && room.state !== "question" && room.state !== "countdown") continue;
+    if (room.state !== "racing" && room.state !== "countdown") continue;
     broadcast(room, { type: "snap", players: playerList(room), state: room.state });
   }
 }, 50);

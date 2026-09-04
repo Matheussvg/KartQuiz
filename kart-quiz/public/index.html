@@ -49,6 +49,25 @@
   #hud small { color: var(--muted); display: block; }
   #badge { position: absolute; top: 18px; right: 14px; font-weight: 800; font-size: 18px; color: var(--flag); text-shadow: 0 2px 8px rgba(0,0,0,.6); }
   #badge.bad { color: var(--bad); }
+  #item { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: rgba(20,24,34,.85); border-radius: 12px; padding: 8px 16px; font-weight: 600; font-size: 15px; display: none; align-items: center; gap: 10px; }
+  #item.on { display: flex; }
+  #item b { font-size: 24px; }
+  #item small { color: var(--muted); font-weight: 400; }
+  #btnFire { position: absolute; right: 14px; bottom: 150px; width: 72px; height: 72px; border-radius: 50%; background: var(--flag); color: #1b1f2a; font-size: 30px; display: none; }
+  #btnFire.on { display: block; }
+  /* carta de pergunta — ás de espadas */
+  .ace { position: relative; width: min(420px, 92%); aspect-ratio: 5 / 7; background: #fbf8f1; color: #14151a; border-radius: 22px; border: 3px solid #14151a;
+    box-shadow: 0 30px 60px rgba(0,0,0,.5), inset 0 0 0 10px #fbf8f1, inset 0 0 0 12px #c9c3b4; padding: 44px 34px 36px; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+  .ace .corner { position: absolute; font: 800 30px/1 Georgia, "Times New Roman", serif; text-align: center; }
+  .ace .corner span { display: block; font-size: 26px; }
+  .ace .tl { top: 16px; left: 18px; } .ace .br { bottom: 16px; right: 18px; transform: rotate(180deg); }
+  .ace .pip { text-align: center; font-size: 42px; line-height: 1; margin-bottom: 4px; }
+  .ace h2 { font-size: 20px; margin: 0 0 8px; line-height: 1.3; text-align: center; font-weight: 600; }
+  .ace .timer { background: #e2ddd0; } .ace .timer i { background: #14151a; }
+  .ace .opts button { background: #14151a; color: #fbf8f1; padding: 12px 14px; font-size: 15px; }
+  .ace .opts button.right { background: var(--ok); color: #0f1a12; }
+  .ace .opts button.wrong { background: var(--bad); color: #fff; }
+  .ace .verdict { text-align: center; }
   #mini { position: absolute; right: 14px; bottom: 14px; width: 192px; height: 120px; background: rgba(20,24,34,.6); border-radius: 12px; }
   #overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15,18,26,.6); }
   .modal { width: min(560px, 92%); background: var(--panel); border-radius: 16px; padding: 22px; }
@@ -68,7 +87,8 @@
   .results i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin-right: 8px; }
   #touch { display: none; position: absolute; inset: auto 0 0 0; justify-content: space-between; padding: 12px; pointer-events: none; }
   #touch button { pointer-events: auto; width: 64px; height: 64px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; font-size: 26px; }
-  @media (pointer: coarse) { #touch { display: flex; } #mini { bottom: 96px; } }
+  @media (pointer: coarse) { #touch { display: flex; } #mini { bottom: 96px; } #btnFire.on { display: block; bottom: 230px; } }
+  @media (pointer: fine) { #btnFire { display: none !important; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -76,7 +96,7 @@
 
 <section id="lobby">
   <div class="card" id="entry">
-    <h1>Kart Quiz <span>Corrida 3D de 3 voltas com perguntas de controle de qualidade.</span></h1>
+    <h1>Kart Quiz <span>Corrida 3D com perguntas de controle de qualidade.</span></h1>
     <div class="row" style="margin-top:20px"><input id="name" maxlength="16" placeholder="Seu nome"></div>
     <div class="row"><button class="primary" id="btnCreate">Criar sala</button></div>
     <p class="or">ou entre em uma sala</p>
@@ -84,8 +104,8 @@
     <div class="err hidden" id="err"></div>
     <ul class="rules">
       <li>Setas ou WASD para dirigir. Bater na barreira te freia.</li>
-      <li>Passar por uma caixa <b>?</b> abre uma pergunta para todo mundo.</li>
-      <li>Quem acerta primeiro ganha impulso. Quem erra (ou não responde) volta um trecho.</li>
+      <li>Caixa <b>?</b> dá um raio. Espaço dispara e derruba quem está na sua frente.</li>
+      <li>A cada 15 segundos aparece uma carta com pergunta. Acertou, segue. Errou ou demorou, volta um trecho.</li>
     </ul>
   </div>
 
@@ -104,6 +124,8 @@
     <canvas id="gl"></canvas>
     <div id="hud"><b id="hudPos">1º</b><div><small id="hudTot">de 1</small><span id="hudLap">Volta 1/3</span></div></div>
     <div id="badge"></div>
+    <div id="item"><b>⚡</b><div>Raio<small> — Espaço derruba quem está na frente</small></div></div>
+    <button id="btnFire">⚡</button>
     <canvas id="mini" width="192" height="120"></canvas>
     <div id="overlay" class="hidden"></div>
     <div id="touch">
@@ -127,7 +149,7 @@ const sendMsg = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
 let me = { id: null, color: "#fff" }, LAPS = 3, isHost = false;
 let others = new Map();
 let phase = "lobby";
-let boxes = [true, true, true];
+let boxes = [true, true, true, true, true, true];
 let question = null;
 
 ws.onclose = () => showError("Conexão perdida. Recarregue a página.");
@@ -143,8 +165,11 @@ ws.onmessage = ev => {
     case "snap": applySnap(m); break;
     case "box": boxes[m.idx] = m.available; break;
     case "question": openQuestion(m); break;
-    case "answer_result": markAnswer(m.ok); break;
+    case "answer_result": markAnswer(m.ok, m.correct); break;
     case "question_end": endQuestion(m); break;
+    case "item": car.item = true; break;
+    case "item_miss": flash("Ninguém na sua frente!"); break;
+    case "hit": onHit(m); break;
     case "finished": if (m.id === me.id) { car.finished = true; car.rank = m.rank; } break;
     case "results": showResults(m.ranking); break;
   }
@@ -171,8 +196,9 @@ function showLobby() { phase = "lobby"; $("#race").classList.add("hidden"); $("#
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 // ---------- Pista (mesma geometria da versão 2D: x = X do mundo, y = Z do mundo) ----------
-const CTRL = [[150,300],[200,150],[400,110],[560,175],[700,110],[830,200],[820,380],[680,490],[480,455],[300,500],[160,430]];
-const HALF = 44;
+const SCALE = 2.2;   // tamanho da pista (a forma vem dos pontos abaixo)
+const CTRL = [[150,300],[200,150],[400,110],[560,175],[700,110],[830,200],[820,380],[680,490],[480,455],[300,500],[160,430]].map(([x, y]) => [x * SCALE, y * SCALE]);
+const HALF = 70;     // metade da largura da pista
 const PATH = [];
 (function build() {
   const n = CTRL.length, per = 12;
@@ -188,15 +214,16 @@ const PATH = [];
 })();
 const N = PATH.length;
 const CPS = [0, Math.floor(N/4), Math.floor(N/2), Math.floor(3*N/4)];
-const BOX_AT = [Math.floor(N*0.28), Math.floor(N*0.55), Math.floor(N*0.82)];
-const BOX_POS = BOX_AT.map(i => PATH[i]);
 function headingAt(i) { const a = PATH[(i + N) % N], b = PATH[(i + 1) % N]; return Math.atan2(b[1]-a[1], b[0]-a[0]); }
 function normalAt(i) { const h = headingAt(i); return [-Math.sin(h), Math.cos(h)]; }   // aponta para a "esquerda" da pista
+// caixas: duas lado a lado em três pontos da pista
+const BOX_POS = [];
+for (const f of [0.28, 0.55, 0.82]) { const i = Math.floor(N * f); const [nx, ny] = normalAt(i); for (const off of [34, -34]) BOX_POS.push([PATH[i][0] + nx*off, PATH[i][1] + ny*off]); }
 function nearestIdx(x, y, hint) {
   let best = -1, bd = Infinity;
   const scan = i => { const [px, py] = PATH[(i + N) % N]; const d = (px-x)**2 + (py-y)**2; if (d < bd) { bd = d; best = (i + N) % N; } };
   if (hint != null) for (let k = -8; k <= 8; k++) scan(hint + k); else for (let i = 0; i < N; i++) scan(i);
-  if (bd > 90*90) { bd = Infinity; for (let i = 0; i < N; i++) scan(i); }
+  if (bd > 220*220) { bd = Infinity; for (let i = 0; i < N; i++) scan(i); }
   return { idx: best, dist: Math.sqrt(bd) };
 }
 
@@ -208,19 +235,19 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9fd3f0);
-scene.fog = new THREE.Fog(0x9fd3f0, 500, 1400);
+scene.fog = new THREE.Fog(0x9fd3f0, 900, 2600);
 const camera = new THREE.PerspectiveCamera(60, 16/10, 1, 3000);
 
 scene.add(new THREE.HemisphereLight(0xdff3ff, 0x3c7a3c, 0.85));
 const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-sun.position.set(300, 500, 200); sun.castShadow = true;
+sun.position.set(600, 900, 400); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -600, right: 600, top: 600, bottom: -600, near: 10, far: 1500 });
+Object.assign(sun.shadow.camera, { left: -1200, right: 1200, top: 1200, bottom: -1200, near: 10, far: 2500 });
 sun.shadow.camera.updateProjectionMatrix();
 scene.add(sun);
 
 // chão
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: 0x4c9a52 }));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), new THREE.MeshLambertMaterial({ color: 0x4c9a52 }));
 ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 
 // faixa (strip) genérica ao longo da pista: fa(i), fb(i) devolvem [x, y, z]; colorFn(i) devolve cor hex por segmento
@@ -253,8 +280,8 @@ for (const s of [1, -1]) {
 }
 // linha de largada
 {
-  const g = new THREE.PlaneGeometry(HALF*2, 12, 8, 2); const c = [];
-  const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const cx = Math.floor((p.getX(i) + HALF) / 11), cy = Math.round(p.getY(i) / 6); const k = (cx + cy) % 2 ? 1 : 0.08; c.push(k, k, k); }
+  const g = new THREE.PlaneGeometry(HALF*2, 12, 12, 2); const c = [];
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const cx = Math.floor((p.getX(i) + HALF) / (HALF/6)), cy = Math.round(p.getY(i) / 6); const k = (cx + cy) % 2 ? 1 : 0.08; c.push(k, k, k); }
   g.setAttribute("color", new THREE.Float32BufferAttribute(c, 3));
   const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true }));
   const h = headingAt(0); m.rotation.x = -Math.PI/2; m.rotation.z = -h - Math.PI/2; m.position.set(PATH[0][0], 0.3, PATH[0][1]); scene.add(m);
@@ -269,8 +296,8 @@ for (const s of [1, -1]) {
   const trunk = new THREE.CylinderGeometry(2, 3, 14, 6), leaf = new THREE.ConeGeometry(12, 30, 7);
   const tm = new THREE.MeshLambertMaterial({ color: 0x7a4b2a }), lm = new THREE.MeshLambertMaterial({ color: 0x2f7a3a });
   let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
-  for (let k = 0; k < 90; k++) {
-    const x = -200 + rnd() * 1400, z = -200 + rnd() * 1000;
+  for (let k = 0; k < 160; k++) {
+    const x = -300 + rnd() * 2600, z = -300 + rnd() * 1900;
     if (nearestIdx(x, z).dist < WALL + 30) continue;
     const t = new THREE.Mesh(trunk, tm); t.position.set(x, 7, z); t.castShadow = true;
     const l = new THREE.Mesh(leaf, lm); l.position.set(x, 28, z); l.castShadow = true; l.scale.setScalar(0.8 + rnd()*0.6);
@@ -312,12 +339,15 @@ function makeKart(color, name) {
   g.add(makeLabel(name));
   scene.add(g); return g;
 }
-const placeKart = (g, x, z, a) => { g.position.set(x, 0, z); g.rotation.y = -a; };
+const placeKart = (g, x, z, a, spin = 0) => { g.position.set(x, 0, z); g.rotation.y = -a + spin; };
 
 // ---------- Meu kart ----------
-const car = { x: 0, y: 0, angle: 0, speed: 0, idx: 0, lap: 1, nextCp: 1, finished: false, rank: 0, boostUntil: 0, stun: 0, mesh: null };
+const car = { x: 0, y: 0, angle: 0, speed: 0, idx: 0, lap: 1, nextCp: 1, finished: false, rank: 0, boostUntil: 0, stun: 0, mesh: null, item: false, hitUntil: 0 };
+let cardOpen = false;
 const keys = {};
-addEventListener("keydown", e => { keys[e.key] = true; if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); });
+addEventListener("keydown", e => { keys[e.key] = true; if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); if (e.key === " " && !e.repeat) fire(); });
+function fire() { if (car.item && phase === "racing" && !cardOpen && !car.finished) { car.item = false; sendMsg({ type: "use_item" }); } }
+$("#btnFire").addEventListener("pointerdown", e => { e.preventDefault(); fire(); });
 addEventListener("keyup", e => keys[e.key] = false);
 for (const b of document.querySelectorAll("#touch button")) {
   const k = b.dataset.k;
@@ -326,11 +356,11 @@ for (const b of document.querySelectorAll("#touch button")) {
 }
 
 function spawn(slot) {
-  const i = (N - 6 - slot * 5 + N) % N;
-  const h = headingAt(i), side = (slot % 2 ? 1 : -1) * 16;
+  const row = Math.floor(slot / 2), i = (N - 3 - row + N) % N;
+  const h = headingAt(i), side = (slot % 2 ? 1 : -1) * 30;
   car.x = PATH[i][0] + Math.cos(h + Math.PI/2) * side;
   car.y = PATH[i][1] + Math.sin(h + Math.PI/2) * side;
-  car.angle = h; car.speed = 0; car.idx = i; car.lap = 1; car.nextCp = 1; car.finished = false; car.rank = 0; car.boostUntil = 0; car.stun = 0;
+  car.angle = h; car.speed = 0; car.idx = i; car.lap = 1; car.nextCp = 1; car.finished = false; car.rank = 0; car.boostUntil = 0; car.stun = 0; car.item = false; car.hitUntil = 0; cardOpen = false;
   // câmera já atrás do kart, sem "voar" até ele
   camGoal(); camera.position.copy(camTarget); camera.lookAt(lookTarget);
 }
@@ -341,7 +371,7 @@ function beginRace(players) {
   car.mesh = makeKart(me.color, "você");
   let slot = 0, mySlot = 0;
   for (const p of players) { if (p.id === me.id) mySlot = slot; else others.set(p.id, { ...p, tx: p.x, ty: p.y, tangle: p.angle, mesh: makeKart(p.color, p.name) }); slot++; }
-  boxes = [true, true, true];
+  boxes = boxes.map(() => true);
   phase = "countdown";
   $("#lobby").classList.add("hidden"); $("#race").classList.remove("hidden"); resize();
   spawn(mySlot);
@@ -351,17 +381,17 @@ function beginRace(players) {
 }
 
 function pushBack() {
-  const i = (car.idx - 14 + N) % N;
+  const i = (car.idx - 6 + N) % N;
   car.x = PATH[i][0]; car.y = PATH[i][1]; car.angle = headingAt(i); car.speed = 0; car.idx = i; car.stun = performance.now() + 600;
 }
 
 function step(dt) {
-  if (phase !== "racing" || car.finished) { car.speed *= 0.9; return; }
+  if (phase !== "racing" || car.finished || cardOpen) { car.speed *= 0.9; return; }
   const now = performance.now();
-  const stunned = now < car.stun, boosted = now < car.boostUntil;
+  const stunned = now < car.stun || now < car.hitUntil, boosted = now < car.boostUntil;
   const up = keys.ArrowUp || keys.w || keys.W, down = keys.ArrowDown || keys.s || keys.S;
   const left = keys.ArrowLeft || keys.a || keys.A, right = keys.ArrowRight || keys.d || keys.D;
-  const maxSp = boosted ? 6.2 : 3.9;
+  const maxSp = boosted ? 6.2 : 4.2;
 
   if (!stunned) {
     if (up) car.speed += 0.14 * dt; else if (down) car.speed -= 0.1 * dt; else car.speed *= Math.pow(0.985, dt);
@@ -398,14 +428,14 @@ function step(dt) {
   for (let b = 0; b < BOX_POS.length; b++) {
     if (!boxes[b]) continue;
     const dx = BOX_POS[b][0] - car.x, dy = BOX_POS[b][1] - car.y;
-    if (dx*dx + dy*dy < 24*24) { boxes[b] = false; sendMsg({ type: "pickup", idx: b }); }
+    if (dx*dx + dy*dy < 26*26 && !car.item) { boxes[b] = false; sendMsg({ type: "pickup", idx: b }); }
   }
 }
 
 let lastSend = 0;
 function net(now) {
   if (now - lastSend < 50) return; lastSend = now;
-  if (phase === "racing" || phase === "question") sendMsg({ type: "pos", x: car.x, y: car.y, angle: car.angle, lap: car.lap, prog: car.idx, boost: now < car.boostUntil });
+  if (phase === "racing") sendMsg({ type: "pos", x: car.x, y: car.y, angle: car.angle, lap: car.lap, prog: car.idx, boost: now < car.boostUntil });
 }
 function applySnap(m) {
   for (const p of m.players) {
@@ -423,48 +453,57 @@ function myPosition() {
   return pos;
 }
 
-// ---------- Perguntas (idêntico à versão 2D) ----------
+// ---------- Carta de pergunta ----------
 function openQuestion(m) {
-  phase = "question"; question = { ...m, answered: false, ok: null };
+  if (car.finished || phase !== "racing") return;
+  cardOpen = true; question = { ...m, answered: false };
   const ov = $("#overlay"); ov.classList.remove("hidden");
-  ov.innerHTML = `<div class="modal" role="dialog" aria-live="polite">
-    <p class="who">${esc(m.trigger)} pegou uma carta. Quem acertar primeiro ganha impulso.</p>
+  ov.innerHTML = `<div class="ace" role="dialog" aria-live="polite">
+    <div class="corner tl">A<span>♠</span></div><div class="corner br">A<span>♠</span></div>
+    <div class="pip">♠</div>
     <h2>${esc(m.text)}</h2>
     <div class="timer"><i id="tbar"></i></div>
-    <div class="opts">${m.options.map((o, i) => `<button data-i="${i}">${esc(o)}</button>`).join("")}</div>
+    <div class="opts">${m.options.map((o, i) => `<button data-i="${i}">${i+1}. ${esc(o)}</button>`).join("")}</div>
     <div class="verdict" id="verdict"></div></div>`;
-  if (car.finished) { $("#verdict").textContent = "Você já terminou — só assistindo."; for (const b of ov.querySelectorAll(".opts button")) b.disabled = true; }
   for (const b of ov.querySelectorAll(".opts button")) b.onclick = () => {
     if (question.answered) return; question.answered = true; question.pick = +b.dataset.i;
     sendMsg({ type: "answer", idx: question.pick });
     for (const x of ov.querySelectorAll(".opts button")) x.disabled = true;
   };
   const total = m.deadline - Date.now(), q0 = question;
-  const tick = () => { if (question !== q0) return; const left = Math.max(0, m.deadline - Date.now()); const bar = $("#tbar"); if (bar) bar.style.transform = `scaleX(${left / total})`; if (left > 0) requestAnimationFrame(tick); };
+  const tick = () => {
+    if (question !== q0) return;
+    const left = Math.max(0, m.deadline - Date.now()); const bar = $("#tbar"); if (bar) bar.style.transform = `scaleX(${left / total})`;
+    if (left > 0) requestAnimationFrame(tick); else if (!question.answered) resolveCard(false, null, "Tempo esgotado — você voltou um trecho.");
+  };
   tick();
   question.keyHandler = e => { const i = "1234".indexOf(e.key); if (i >= 0) { const b = ov.querySelector(`.opts button[data-i="${i}"]`); if (b) b.click(); } };
   addEventListener("keydown", question.keyHandler);
 }
-function markAnswer(ok) {
-  if (!question) return; question.ok = ok;
+function markAnswer(ok, correct) {
+  if (!question) return;
   const b = $(`#overlay .opts button[data-i="${question.pick}"]`); if (b) b.classList.add(ok ? "right" : "wrong");
-  $("#verdict").textContent = ok ? "Certo! Esperando os outros…" : "Errou. Você vai voltar um trecho.";
+  resolveCard(ok, correct, ok ? "Certo! Acelera." : "Errou — você voltou um trecho.");
 }
-function endQuestion(m) {
+function resolveCard(ok, correct, text) {
   if (!question) return;
   removeEventListener("keydown", question.keyHandler);
-  const res = m.results[me.id], ov = $("#overlay");
-  const right = ov.querySelector(`.opts button[data-i="${question.options.indexOf(m.correct)}"]`); if (right) right.classList.add("right");
-  let text;
-  if (m.winnerId === me.id) { car.boostUntil = performance.now() + 3200; text = "Você foi o mais rápido — impulso!"; }
-  else if (res === "right") text = m.winnerName ? `Certo, mas ${esc(m.winnerName)} foi mais rápido.` : "Certo!";
-  else if (res === "wrong") { pushBack(); text = "Resposta errada — você voltou um trecho."; }
-  else if (res === "none") { pushBack(); text = "Tempo esgotado — você voltou um trecho."; }
-  else text = m.winnerName ? `${esc(m.winnerName)} ganhou o impulso.` : "Ninguém acertou.";
-  $("#verdict").innerHTML = text;
+  if (correct) { const r = $(`#overlay .opts button[data-i="${question.options.indexOf(correct)}"]`); if (r) r.classList.add("right"); }
+  for (const x of document.querySelectorAll("#overlay .opts button")) x.disabled = true;
+  $("#verdict").textContent = text;
   question = null;
-  setTimeout(() => { if (phase === "question") { phase = "racing"; ov.classList.add("hidden"); } }, 1400);
+  if (!ok) pushBack();
+  setTimeout(() => { if (cardOpen) { cardOpen = false; $("#overlay").classList.add("hidden"); } }, ok ? 500 : 1200);
 }
+function endQuestion() { if (question && !question.answered) resolveCard(false, null, "Tempo esgotado — você voltou um trecho."); }
+function onHit(m) {
+  const now = performance.now();
+  if (m.id === me.id) { car.hitUntil = now + m.duration; car.speed = 0; flash(`${esc(m.by)} te derrubou!`); }
+  else { const o = others.get(m.id); if (o) o.hitUntil = now + m.duration; }
+}
+let flashUntil = 0, flashText = "";
+function flash(t) { flashText = t; flashUntil = performance.now() + 1500; }
+
 function showResults(ranking) {
   phase = "results"; question = null;
   const ov = $("#overlay"); ov.classList.remove("hidden");
@@ -478,20 +517,22 @@ function showResults(ranking) {
 const camTarget = new THREE.Vector3(), lookTarget = new THREE.Vector3();
 function camGoal() {
   const fx = Math.cos(car.angle), fz = Math.sin(car.angle);
-  camTarget.set(car.x - fx * 70, 38, car.y - fz * 70);
-  lookTarget.set(car.x + fx * 30, 10, car.y + fz * 30);
+  camTarget.set(car.x - fx * 90, 46, car.y - fz * 90);
+  lookTarget.set(car.x + fx * 40, 10, car.y + fz * 40);
 }
 const mini = $("#mini").getContext("2d");
+const MB = (() => { const xs = PATH.map(p => p[0]), ys = PATH.map(p => p[1]); const x0 = Math.min(...xs) - HALF, x1 = Math.max(...xs) + HALF, y0 = Math.min(...ys) - HALF, y1 = Math.max(...ys) + HALF;
+  const sc = Math.min(176 / (x1 - x0), 104 / (y1 - y0)); return { sc, ox: 96 - (x0 + x1) / 2 * sc, oy: 60 - (y0 + y1) / 2 * sc }; })();
 function drawMini() {
   mini.clearRect(0, 0, 192, 120);
-  mini.save(); mini.scale(0.2, 0.2);
+  mini.save(); mini.translate(MB.ox, MB.oy); mini.scale(MB.sc, MB.sc);
   mini.lineJoin = "round"; mini.lineCap = "round";
   mini.beginPath(); mini.moveTo(PATH[0][0], PATH[0][1]); for (const [x, y] of PATH) mini.lineTo(x, y); mini.closePath();
   mini.strokeStyle = "rgba(255,255,255,.55)"; mini.lineWidth = HALF * 2; mini.stroke();
-  for (let b = 0; b < BOX_POS.length; b++) if (boxes[b]) { mini.fillStyle = "#ffc857"; mini.fillRect(BOX_POS[b][0]-12, BOX_POS[b][1]-12, 24, 24); }
+  for (let b = 0; b < BOX_POS.length; b++) if (boxes[b]) { mini.fillStyle = "#ffc857"; mini.fillRect(BOX_POS[b][0]-16, BOX_POS[b][1]-16, 32, 32); }
   const dot = (x, y, c, r) => { mini.fillStyle = c; mini.beginPath(); mini.arc(x, y, r, 0, Math.PI*2); mini.fill(); };
-  for (const o of others.values()) dot(o.x, o.y, o.color, 16);
-  dot(car.x, car.y, "#fff", 24); dot(car.x, car.y, me.color, 16);
+  for (const o of others.values()) dot(o.x, o.y, o.color, 26);
+  dot(car.x, car.y, "#fff", 38); dot(car.x, car.y, me.color, 26);
   mini.restore();
 }
 function hud(now) {
@@ -499,10 +540,13 @@ function hud(now) {
   $("#hudPos").textContent = pos + "º"; $("#hudTot").textContent = "de " + tot;
   $("#hudLap").textContent = car.finished ? "Chegou!" : `Volta ${Math.min(car.lap, LAPS)}/${LAPS}`;
   const b = $("#badge");
-  if (now < car.boostUntil) { b.textContent = "IMPULSO"; b.className = ""; }
+  if (now < flashUntil) { b.innerHTML = flashText; b.className = "bad"; }
+  else if (now < car.hitUntil) { b.textContent = "derrubado!"; b.className = "bad"; }
   else if (now < car.stun) { b.textContent = "voltou um trecho"; b.className = "bad"; }
   else if (car.hit && now - car.hit < 500) { b.textContent = "bateu!"; b.className = "bad"; }
   else b.textContent = "";
+  $("#item").classList.toggle("on", car.item);
+  $("#btnFire").classList.toggle("on", car.item);
 }
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -518,9 +562,9 @@ function frame(now) {
     for (const o of others.values()) {
       o.x += (o.tx - o.x) * 0.35; o.y += (o.ty - o.y) * 0.35;
       let da = o.tangle - o.angle; da = Math.atan2(Math.sin(da), Math.cos(da)); o.angle += da * 0.35;
-      placeKart(o.mesh, o.x, o.y, o.angle); o.mesh.userData.flame.visible = !!o.boost;
+      placeKart(o.mesh, o.x, o.y, o.angle, o.hitUntil > now ? (o.hitUntil - now) / 100 : 0); o.mesh.userData.flame.visible = !!o.boost;
     }
-    placeKart(car.mesh, car.x, car.y, car.angle);
+    placeKart(car.mesh, car.x, car.y, car.angle, car.hitUntil > now ? (car.hitUntil - now) / 100 : 0);
     car.mesh.userData.flame.visible = now < car.boostUntil;
     car.mesh.position.y = Math.abs(car.speed) > 0.5 ? Math.sin(now / 40) * 0.3 : 0;
     for (let b = 0; b < boxMeshes.length; b++) { const m = boxMeshes[b]; m.rotation.y = now / 800; m.rotation.x = now / 1300; m.position.y = 14 + Math.sin(now / 300 + b) * 2; m.material.opacity = boxes[b] ? 1 : 0.2; }
