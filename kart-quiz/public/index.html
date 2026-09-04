@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kart Quiz — corrida de controle de qualidade</title>
+<title>Kart Quiz 3D — corrida de controle de qualidade</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   :root {
     --bg: #1b1f2a; --panel: #262b38; --panel-2: #2f3543; --ink: #f3f1ea; --muted: #a8adba;
@@ -23,7 +24,6 @@
   input::placeholder { color: #6b7180; }
   .hidden { display: none !important; }
 
-  /* Lobby */
   #lobby { min-height: 100%; display: grid; place-items: center; padding: 24px; }
   .card { width: min(520px, 100%); background: var(--panel); border-radius: 18px; padding: 28px; }
   h1 { font-size: 40px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; line-height: 1; }
@@ -40,11 +40,17 @@
   .err { background: #3a2226; color: #ffb3b3; padding: 10px 12px; border-radius: 10px; margin-top: 12px; }
   .rules { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 16px 0 0; padding-left: 18px; }
 
-  /* Corrida */
-  #race { display: grid; place-items: center; min-height: 100%; padding: 12px; }
-  #stage { position: relative; width: min(960px, 100%); aspect-ratio: 16 / 10; }
-  canvas { width: 100%; height: 100%; display: block; border-radius: 14px; background: #4c9a52; }
-  #overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15,18,26,.6); border-radius: 14px; }
+  #race { position: fixed; inset: 0; }
+  #stage { position: absolute; inset: 0; }
+  #gl { width: 100%; height: 100%; display: block; }
+  #hud { position: absolute; top: 14px; left: 14px; background: rgba(20,24,34,.85); border-radius: 12px; padding: 10px 16px; display: flex; gap: 14px; align-items: center; }
+  #hud b { font-size: 30px; font-weight: 800; line-height: 1; }
+  #hud div { font-size: 15px; line-height: 1.35; }
+  #hud small { color: var(--muted); display: block; }
+  #badge { position: absolute; top: 18px; right: 14px; font-weight: 800; font-size: 18px; color: var(--flag); text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+  #badge.bad { color: var(--bad); }
+  #mini { position: absolute; right: 14px; bottom: 14px; width: 192px; height: 120px; background: rgba(20,24,34,.6); border-radius: 12px; }
+  #overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15,18,26,.6); }
   .modal { width: min(560px, 92%); background: var(--panel); border-radius: 16px; padding: 22px; }
   .modal .who { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
   .modal h2 { font-size: 22px; margin: 0 0 14px; line-height: 1.3; }
@@ -62,7 +68,7 @@
   .results i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin-right: 8px; }
   #touch { display: none; position: absolute; inset: auto 0 0 0; justify-content: space-between; padding: 12px; pointer-events: none; }
   #touch button { pointer-events: auto; width: 64px; height: 64px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; font-size: 26px; }
-  @media (pointer: coarse) { #touch { display: flex; } }
+  @media (pointer: coarse) { #touch { display: flex; } #mini { bottom: 96px; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -70,14 +76,14 @@
 
 <section id="lobby">
   <div class="card" id="entry">
-    <h1>Kart Quiz <span>Corrida de 3 voltas com perguntas de controle de qualidade.</span></h1>
+    <h1>Kart Quiz <span>Corrida 3D de 3 voltas com perguntas de controle de qualidade.</span></h1>
     <div class="row" style="margin-top:20px"><input id="name" maxlength="16" placeholder="Seu nome"></div>
     <div class="row"><button class="primary" id="btnCreate">Criar sala</button></div>
     <p class="or">ou entre em uma sala</p>
     <div class="row"><input id="code" maxlength="4" placeholder="Código de 4 letras" style="text-transform:uppercase"><button class="ghost" id="btnJoin">Entrar</button></div>
     <div class="err hidden" id="err"></div>
     <ul class="rules">
-      <li>Setas ou WASD para dirigir. Grama deixa o kart lento.</li>
+      <li>Setas ou WASD para dirigir. Bater na barreira te freia.</li>
       <li>Passar por uma caixa <b>?</b> abre uma pergunta para todo mundo.</li>
       <li>Quem acerta primeiro ganha impulso. Quem erra (ou não responde) volta um trecho.</li>
     </ul>
@@ -86,7 +92,7 @@
   <div class="card hidden" id="waiting">
     <p class="hint" style="margin:0">Código da sala</p>
     <div class="code" id="roomCode">----</div>
-    <p class="hint">Todos precisam estar na mesma rede e abrir o mesmo endereço.</p>
+    <p class="hint">Passe esse código para os outros pilotos.</p>
     <ul class="players" id="playerList"></ul>
     <button class="primary" id="btnStart" style="width:100%">Começar a corrida</button>
     <p class="hint hidden" id="waitHost" style="margin-top:10px">Esperando quem criou a sala dar a largada…</p>
@@ -95,7 +101,10 @@
 
 <section id="race" class="hidden">
   <div id="stage">
-    <canvas id="c" width="960" height="600"></canvas>
+    <canvas id="gl"></canvas>
+    <div id="hud"><b id="hudPos">1º</b><div><small id="hudTot">de 1</small><span id="hudLap">Volta 1/3</span></div></div>
+    <div id="badge"></div>
+    <canvas id="mini" width="192" height="120"></canvas>
     <div id="overlay" class="hidden"></div>
     <div id="touch">
       <div><button data-k="ArrowLeft">◀</button> <button data-k="ArrowRight">▶</button></div>
@@ -107,17 +116,20 @@
 <script>
 // ---------- Rede ----------
 const $ = s => document.querySelector(s);
-const proto = location.protocol === "https:" ? "wss://" : "ws://";
-const ws = new WebSocket(proto + location.host);
+// Se o jogo estiver publicado separado do servidor (ex.: Netlify + Render), coloque aqui o endereço do servidor.
+// Exemplo: "kart-quiz.onrender.com". Vazio = mesmo endereço da página (rodando local com npm start).
+const SERVER = "";
+const wsHost = SERVER || location.host;
+const proto = SERVER ? "wss://" : (location.protocol === "https:" ? "wss://" : "ws://");
+const ws = new WebSocket(proto + wsHost);
 const sendMsg = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
 
 let me = { id: null, color: "#fff" }, LAPS = 3, isHost = false;
-let others = new Map();          // id -> {name,color,x,y,angle,tx,ty,tangle,lap,finished,boost}
-let phase = "lobby";             // lobby | countdown | racing | question | results
+let others = new Map();
+let phase = "lobby";
 let boxes = [true, true, true];
 let question = null;
 
-ws.onopen = () => {};
 ws.onclose = () => showError("Conexão perdida. Recarregue a página.");
 ws.onmessage = ev => {
   const m = JSON.parse(ev.data);
@@ -125,13 +137,12 @@ ws.onmessage = ev => {
     case "error": showError(m.text); break;
     case "joined": me.id = m.id; me.color = m.color; LAPS = m.laps;
       $("#entry").classList.add("hidden"); $("#waiting").classList.remove("hidden"); $("#roomCode").textContent = m.code; break;
-    case "lobby": renderLobby(m); if (m.state === "lobby" && phase === "results") { showLobby(); } break;
+    case "lobby": renderLobby(m); if (m.state === "lobby" && phase === "results") showLobby(); break;
     case "countdown": beginRace(m.players); break;
     case "go": phase = "racing"; $("#overlay").classList.add("hidden"); break;
     case "snap": applySnap(m); break;
     case "box": boxes[m.idx] = m.available; break;
     case "question": openQuestion(m); break;
-    case "first_correct": if (question) question.first = m.name; break;
     case "answer_result": markAnswer(m.ok); break;
     case "question_end": endQuestion(m); break;
     case "finished": if (m.id === me.id) { car.finished = true; car.rank = m.rank; } break;
@@ -155,16 +166,14 @@ function renderLobby(m) {
   }
   $("#btnStart").classList.toggle("hidden", !isHost);
   $("#waitHost").classList.toggle("hidden", isHost);
-  $("#btnStart").disabled = m.players.length < 1;
 }
 function showLobby() { phase = "lobby"; $("#race").classList.add("hidden"); $("#lobby").classList.remove("hidden"); $("#overlay").classList.add("hidden"); }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-// ---------- Pista ----------
-// Linha central definida por pontos de controle, suavizada com Catmull-Rom.
+// ---------- Pista (mesma geometria da versão 2D: x = X do mundo, y = Z do mundo) ----------
 const CTRL = [[150,300],[200,150],[400,110],[560,175],[700,110],[830,200],[820,380],[680,490],[480,455],[300,500],[160,430]];
-const HALF = 44;           // metade da largura da pista
-const PATH = [];           // pontos amostrados da linha central
+const HALF = 44;
+const PATH = [];
 (function build() {
   const n = CTRL.length, per = 12;
   for (let i = 0; i < n; i++) {
@@ -178,22 +187,135 @@ const PATH = [];           // pontos amostrados da linha central
   }
 })();
 const N = PATH.length;
-const CPS = [0, Math.floor(N/4), Math.floor(N/2), Math.floor(3*N/4)];   // checkpoints (índices)
+const CPS = [0, Math.floor(N/4), Math.floor(N/2), Math.floor(3*N/4)];
 const BOX_AT = [Math.floor(N*0.28), Math.floor(N*0.55), Math.floor(N*0.82)];
 const BOX_POS = BOX_AT.map(i => PATH[i]);
-
+function headingAt(i) { const a = PATH[(i + N) % N], b = PATH[(i + 1) % N]; return Math.atan2(b[1]-a[1], b[0]-a[0]); }
+function normalAt(i) { const h = headingAt(i); return [-Math.sin(h), Math.cos(h)]; }   // aponta para a "esquerda" da pista
 function nearestIdx(x, y, hint) {
-  // busca local ao redor do índice anterior (rápido) com fallback global
   let best = -1, bd = Infinity;
   const scan = i => { const [px, py] = PATH[(i + N) % N]; const d = (px-x)**2 + (py-y)**2; if (d < bd) { bd = d; best = (i + N) % N; } };
   if (hint != null) for (let k = -8; k <= 8; k++) scan(hint + k); else for (let i = 0; i < N; i++) scan(i);
   if (bd > 90*90) { bd = Infinity; for (let i = 0; i < N; i++) scan(i); }
   return { idx: best, dist: Math.sqrt(bd) };
 }
-function headingAt(i) { const a = PATH[i % N], b = PATH[(i + 1) % N]; return Math.atan2(b[1]-a[1], b[0]-a[0]); }
+
+// ---------- Cena 3D ----------
+const glCanvas = $("#gl");
+const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fd3f0);
+scene.fog = new THREE.Fog(0x9fd3f0, 500, 1400);
+const camera = new THREE.PerspectiveCamera(60, 16/10, 1, 3000);
+
+scene.add(new THREE.HemisphereLight(0xdff3ff, 0x3c7a3c, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+sun.position.set(300, 500, 200); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -600, right: 600, top: 600, bottom: -600, near: 10, far: 1500 });
+sun.shadow.camera.updateProjectionMatrix();
+scene.add(sun);
+
+// chão
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: 0x4c9a52 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+// faixa (strip) genérica ao longo da pista: fa(i), fb(i) devolvem [x, y, z]; colorFn(i) devolve cor hex por segmento
+function strip(fa, fb, colorFn, material) {
+  const pos = [], col = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const k = i % N; const a = fa(k), b = fb(k); pos.push(...a, ...b);
+    const c = new THREE.Color(colorFn(k)); col.push(c.r, c.g, c.b, c.r, c.g, c.b);
+  }
+  for (let i = 0; i < N; i++) { const o = i * 2; idx.push(o, o+1, o+2, o+1, o+3, o+2); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, material || new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  m.receiveShadow = true; scene.add(m); return m;
+}
+const at = (i, off, y = 0) => { const [x, z] = PATH[i], [nx, nz] = normalAt(i); return [x + nx*off, y, z + nz*off]; };
+strip(i => at(i, HALF, 0.1), i => at(i, -HALF, 0.1), () => 0x4a4f58);                                // asfalto
+strip(i => at(i, HALF+8, 0.15), i => at(i, HALF, 0.15), i => (Math.floor(i/3)%2 ? 0xe0413d : 0xf6f1e6));   // zebra esquerda
+strip(i => at(i, -HALF, 0.15), i => at(i, -HALF-8, 0.15), i => (Math.floor(i/3)%2 ? 0xe0413d : 0xf6f1e6)); // zebra direita
+strip(i => at(i, 2, 0.2), i => at(i, -2, 0.2), i => (Math.floor(i/2)%2 ? 0x4a4f58 : 0xb9bcc4));           // faixa central
+// barreiras (muro de pneus): parede vertical + tampa
+const WALL = HALF + 9, WALL_H = 11;
+for (const s of [1, -1]) {
+  const wallMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const w = strip(i => at(i, s*WALL, 0), i => at(i, s*WALL, WALL_H), i => (Math.floor(i/2)%2 ? 0x2b2f36 : 0xffc857), wallMat);
+  w.castShadow = true;
+  strip(i => at(i, s*WALL - 2, WALL_H), i => at(i, s*WALL + 2, WALL_H), () => 0x1e2126);
+}
+// linha de largada
+{
+  const g = new THREE.PlaneGeometry(HALF*2, 12, 8, 2); const c = [];
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const cx = Math.floor((p.getX(i) + HALF) / 11), cy = Math.round(p.getY(i) / 6); const k = (cx + cy) % 2 ? 1 : 0.08; c.push(k, k, k); }
+  g.setAttribute("color", new THREE.Float32BufferAttribute(c, 3));
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true }));
+  const h = headingAt(0); m.rotation.x = -Math.PI/2; m.rotation.z = -h - Math.PI/2; m.position.set(PATH[0][0], 0.3, PATH[0][1]); scene.add(m);
+  // pórtico
+  const post = new THREE.CylinderGeometry(2, 2, 40, 8), pm = new THREE.MeshLambertMaterial({ color: 0xe8e8e8 });
+  for (const s of [1, -1]) { const q = new THREE.Mesh(post, pm); const [x, y, z] = at(0, s*(WALL+6), 20); q.position.set(x, y, z); q.castShadow = true; scene.add(q); }
+  const beam = new THREE.Mesh(new THREE.BoxGeometry((WALL+6)*2, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffc857 }));
+  beam.position.set(PATH[0][0], 40, PATH[0][1]); beam.rotation.y = -h - Math.PI/2; beam.castShadow = true; scene.add(beam);
+}
+// árvores fora da pista
+{
+  const trunk = new THREE.CylinderGeometry(2, 3, 14, 6), leaf = new THREE.ConeGeometry(12, 30, 7);
+  const tm = new THREE.MeshLambertMaterial({ color: 0x7a4b2a }), lm = new THREE.MeshLambertMaterial({ color: 0x2f7a3a });
+  let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  for (let k = 0; k < 90; k++) {
+    const x = -200 + rnd() * 1400, z = -200 + rnd() * 1000;
+    if (nearestIdx(x, z).dist < WALL + 30) continue;
+    const t = new THREE.Mesh(trunk, tm); t.position.set(x, 7, z); t.castShadow = true;
+    const l = new THREE.Mesh(leaf, lm); l.position.set(x, 28, z); l.castShadow = true; l.scale.setScalar(0.8 + rnd()*0.6);
+    scene.add(t, l);
+  }
+}
+// caixas "?"
+const boxMeshes = BOX_POS.map(([x, z]) => {
+  const cv = document.createElement("canvas"); cv.width = cv.height = 128; const c = cv.getContext("2d");
+  c.fillStyle = "#ffc857"; c.fillRect(0, 0, 128, 128); c.fillStyle = "#1b1f2a"; c.font = "800 96px Rubik, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("?", 64, 70);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(18, 18, 18), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
+  m.position.set(x, 14, z); m.castShadow = true; scene.add(m); return m;
+});
+
+// kart 3D
+function makeLabel(text) {
+  const cv = document.createElement("canvas"); cv.width = 256; cv.height = 64; const c = cv.getContext("2d");
+  c.font = "600 34px Rubik, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
+  c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = 8; c.fillStyle = "#fff"; c.fillText(text, 128, 32);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+  s.scale.set(48, 12, 1); s.position.y = 26; return s;
+}
+function makeKart(color, name) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(24, 7, 14), new THREE.MeshLambertMaterial({ color }));
+  body.position.y = 6; body.castShadow = true; g.add(body);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 8), new THREE.MeshLambertMaterial({ color }));
+  nose.position.set(14, 5, 0); g.add(nose);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(8, 6, 9), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+  seat.position.set(-6, 11, 0); g.add(seat);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(4, 10, 8), new THREE.MeshLambertMaterial({ color: 0xffd7a8 }));
+  head.position.set(-2, 15, 0); g.add(head);
+  const helm = new THREE.Mesh(new THREE.SphereGeometry(4.6, 10, 8, 0, Math.PI*2, 0, Math.PI*0.6), new THREE.MeshLambertMaterial({ color }));
+  helm.position.copy(head.position); g.add(helm);
+  const wheelG = new THREE.CylinderGeometry(4, 4, 4, 10), wm = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  for (const [x, z] of [[8, 8], [8, -8], [-8, 8], [-8, -8]]) { const w = new THREE.Mesh(wheelG, wm); w.rotation.x = Math.PI/2; w.position.set(x, 4, z); w.castShadow = true; g.add(w); }
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(4, 22, 8), new THREE.MeshBasicMaterial({ color: 0xffc857, transparent: true, opacity: 0.85 }));
+  flame.rotation.z = Math.PI/2; flame.position.set(-22, 6, 0); flame.visible = false; g.add(flame); g.userData.flame = flame;
+  g.add(makeLabel(name));
+  scene.add(g); return g;
+}
+const placeKart = (g, x, z, a) => { g.position.set(x, 0, z); g.rotation.y = -a; };
 
 // ---------- Meu kart ----------
-const car = { x: 0, y: 0, angle: 0, speed: 0, idx: 0, lap: 1, nextCp: 1, finished: false, rank: 0, boostUntil: 0, stun: 0 };
+const car = { x: 0, y: 0, angle: 0, speed: 0, idx: 0, lap: 1, nextCp: 1, finished: false, rank: 0, boostUntil: 0, stun: 0, mesh: null };
 const keys = {};
 addEventListener("keydown", e => { keys[e.key] = true; if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); });
 addEventListener("keyup", e => keys[e.key] = false);
@@ -205,27 +327,30 @@ for (const b of document.querySelectorAll("#touch button")) {
 
 function spawn(slot) {
   const i = (N - 6 - slot * 5 + N) % N;
-  const h = headingAt(i), side = (slot % 2 ? 1 : -1) * 18;
+  const h = headingAt(i), side = (slot % 2 ? 1 : -1) * 16;
   car.x = PATH[i][0] + Math.cos(h + Math.PI/2) * side;
   car.y = PATH[i][1] + Math.sin(h + Math.PI/2) * side;
   car.angle = h; car.speed = 0; car.idx = i; car.lap = 1; car.nextCp = 1; car.finished = false; car.rank = 0; car.boostUntil = 0; car.stun = 0;
+  // câmera já atrás do kart, sem "voar" até ele
+  camGoal(); camera.position.copy(camTarget); camera.lookAt(lookTarget);
 }
 
 function beginRace(players) {
-  others.clear();
+  for (const o of others.values()) scene.remove(o.mesh); others.clear();
+  if (car.mesh) scene.remove(car.mesh);
+  car.mesh = makeKart(me.color, "você");
   let slot = 0, mySlot = 0;
-  for (const p of players) { if (p.id === me.id) mySlot = slot; else others.set(p.id, { ...p, tx: p.x, ty: p.y, tangle: p.angle }); slot++; }
-  spawn(mySlot);
+  for (const p of players) { if (p.id === me.id) mySlot = slot; else others.set(p.id, { ...p, tx: p.x, ty: p.y, tangle: p.angle, mesh: makeKart(p.color, p.name) }); slot++; }
   boxes = [true, true, true];
   phase = "countdown";
-  $("#lobby").classList.add("hidden"); $("#race").classList.remove("hidden");
+  $("#lobby").classList.add("hidden"); $("#race").classList.remove("hidden"); resize();
+  spawn(mySlot);
   const ov = $("#overlay"); ov.classList.remove("hidden");
   let n = 3; ov.innerHTML = `<div class="count">${n}</div>`;
   const t = setInterval(() => { n--; if (n > 0) ov.innerHTML = `<div class="count">${n}</div>`; else { ov.innerHTML = `<div class="count">VAI!</div>`; clearInterval(t); } }, 1000);
 }
 
 function pushBack() {
-  // volta ~14 pontos da pista, sem mudar a volta ou o checkpoint (o próximo continua sendo o mesmo)
   const i = (car.idx - 14 + N) % N;
   car.x = PATH[i][0]; car.y = PATH[i][1]; car.angle = headingAt(i); car.speed = 0; car.idx = i; car.stun = performance.now() + 600;
 }
@@ -233,14 +358,10 @@ function pushBack() {
 function step(dt) {
   if (phase !== "racing" || car.finished) { car.speed *= 0.9; return; }
   const now = performance.now();
-  const stunned = now < car.stun;
-  const boosted = now < car.boostUntil;
+  const stunned = now < car.stun, boosted = now < car.boostUntil;
   const up = keys.ArrowUp || keys.w || keys.W, down = keys.ArrowDown || keys.s || keys.S;
   const left = keys.ArrowLeft || keys.a || keys.A, right = keys.ArrowRight || keys.d || keys.D;
-
-  const near = nearestIdx(car.x, car.y, car.idx);
-  const onTrack = near.dist <= HALF + 6;
-  const maxSp = (boosted ? 6.2 : 3.9) * (onTrack ? 1 : 0.42);
+  const maxSp = boosted ? 6.2 : 3.9;
 
   if (!stunned) {
     if (up) car.speed += 0.14 * dt; else if (down) car.speed -= 0.1 * dt; else car.speed *= Math.pow(0.985, dt);
@@ -251,22 +372,29 @@ function step(dt) {
   }
   car.x += Math.cos(car.angle) * car.speed * dt;
   car.y += Math.sin(car.angle) * car.speed * dt;
-  car.x = Math.max(10, Math.min(950, car.x)); car.y = Math.max(10, Math.min(590, car.y));
 
-  // progresso na volta: só avança se a direção do movimento faz sentido (evita voltar de ré e "pular" checkpoint)
+  // barreira: mantém o kart dentro da pista, freia na batida
   const n2 = nearestIdx(car.x, car.y, car.idx);
+  const [nx, ny] = normalAt(n2.idx);
+  const lat = (car.x - PATH[n2.idx][0]) * nx + (car.y - PATH[n2.idx][1]) * ny;
+  const LIM = HALF + 1;
+  if (Math.abs(lat) > LIM) {
+    const over = Math.abs(lat) - LIM, s = Math.sign(lat);
+    car.x -= nx * over * s; car.y -= ny * over * s;
+    car.speed *= 0.55;
+    // vira o nariz de volta para a direção da pista
+    const h = headingAt(n2.idx); let d = h - car.angle; d = Math.atan2(Math.sin(d), Math.cos(d)); car.angle += d * 0.25;
+    car.hit = now;
+  }
+
   const fwd = ((n2.idx - car.idx) + N) % N;
   if (fwd < N / 2) car.idx = n2.idx; else if (fwd > N / 2 && (N - fwd) < 20) car.idx = n2.idx;
 
   const cpTarget = CPS[car.nextCp % 4];
-  const dToCp = ((car.idx - cpTarget) + N) % N;
-  if (dToCp <= 4) {
+  if (((car.idx - cpTarget) + N) % N <= 4) {
     car.nextCp++;
-    if (car.nextCp % 4 === 0) { /* passou pelos 4: cruzou a linha de chegada */ }
     if (car.nextCp % 4 === 1 && car.nextCp > 1) { car.lap++; if (car.lap > LAPS) car.finished = true; }
   }
-
-  // caixas
   for (let b = 0; b < BOX_POS.length; b++) {
     if (!boxes[b]) continue;
     const dx = BOX_POS[b][0] - car.x, dy = BOX_POS[b][1] - car.y;
@@ -283,10 +411,10 @@ function applySnap(m) {
   for (const p of m.players) {
     if (p.id === me.id) continue;
     let o = others.get(p.id);
-    if (!o) { o = { ...p, tx: p.x, ty: p.y, tangle: p.angle }; others.set(p.id, o); }
-    o.tx = p.x; o.ty = p.y; o.tangle = p.angle; o.lap = p.lap; o.prog = p.prog; o.finished = p.finished; o.rank = p.rank; o.boost = p.boost; o.name = p.name;
+    if (!o) { o = { ...p, tx: p.x, ty: p.y, tangle: p.angle, mesh: makeKart(p.color, p.name) }; others.set(p.id, o); }
+    o.tx = p.x; o.ty = p.y; o.tangle = p.angle; o.lap = p.lap; o.prog = p.prog; o.finished = p.finished; o.rank = p.rank; o.boost = p.boost;
   }
-  for (const id of [...others.keys()]) if (!m.players.some(p => p.id === id)) others.delete(id);
+  for (const [id, o] of [...others]) if (!m.players.some(p => p.id === id)) { scene.remove(o.mesh); others.delete(id); }
 }
 function myPosition() {
   const score = p => (p.finished ? 1e6 - p.rank : p.lap * 10000 + p.prog);
@@ -295,9 +423,9 @@ function myPosition() {
   return pos;
 }
 
-// ---------- Perguntas ----------
+// ---------- Perguntas (idêntico à versão 2D) ----------
 function openQuestion(m) {
-  phase = "question"; question = { ...m, answered: false, ok: null, first: null };
+  phase = "question"; question = { ...m, answered: false, ok: null };
   const ov = $("#overlay"); ov.classList.remove("hidden");
   ov.innerHTML = `<div class="modal" role="dialog" aria-live="polite">
     <p class="who">${esc(m.trigger)} pegou uma carta. Quem acertar primeiro ganha impulso.</p>
@@ -311,10 +439,9 @@ function openQuestion(m) {
     sendMsg({ type: "answer", idx: question.pick });
     for (const x of ov.querySelectorAll(".opts button")) x.disabled = true;
   };
-  const total = m.deadline - Date.now();
-  const tick = () => { if (!question || question !== q0) return; const left = Math.max(0, m.deadline - Date.now()); const bar = $("#tbar"); if (bar) bar.style.transform = `scaleX(${left / total})`; if (left > 0) requestAnimationFrame(tick); };
-  const q0 = question; tick();
-  // teclas 1-4 respondem
+  const total = m.deadline - Date.now(), q0 = question;
+  const tick = () => { if (question !== q0) return; const left = Math.max(0, m.deadline - Date.now()); const bar = $("#tbar"); if (bar) bar.style.transform = `scaleX(${left / total})`; if (left > 0) requestAnimationFrame(tick); };
+  tick();
   question.keyHandler = e => { const i = "1234".indexOf(e.key); if (i >= 0) { const b = ov.querySelector(`.opts button[data-i="${i}"]`); if (b) b.click(); } };
   addEventListener("keydown", question.keyHandler);
 }
@@ -326,8 +453,7 @@ function markAnswer(ok) {
 function endQuestion(m) {
   if (!question) return;
   removeEventListener("keydown", question.keyHandler);
-  const res = m.results[me.id];
-  const ov = $("#overlay");
+  const res = m.results[me.id], ov = $("#overlay");
   const right = ov.querySelector(`.opts button[data-i="${question.options.indexOf(m.correct)}"]`); if (right) right.classList.add("right");
   let text;
   if (m.winnerId === me.id) { car.boostUntil = performance.now() + 3200; text = "Você foi o mais rápido — impulso!"; }
@@ -339,7 +465,6 @@ function endQuestion(m) {
   question = null;
   setTimeout(() => { if (phase === "question") { phase = "racing"; ov.classList.add("hidden"); } }, 1400);
 }
-
 function showResults(ranking) {
   phase = "results"; question = null;
   const ov = $("#overlay"); ov.classList.remove("hidden");
@@ -349,69 +474,62 @@ function showResults(ranking) {
   if (isHost) { $("#again").onclick = () => sendMsg({ type: "start" }); $("#toLobby").onclick = () => sendMsg({ type: "back_to_lobby" }); }
 }
 
-// ---------- Desenho ----------
-const cv = $("#c"), ctx = cv.getContext("2d");
-function drawTrack() {
-  ctx.fillStyle = "#4c9a52"; ctx.fillRect(0, 0, 960, 600);
-  // listras de grama sutis
-  ctx.fillStyle = "rgba(255,255,255,.04)"; for (let y = 0; y < 600; y += 40) ctx.fillRect(0, y, 960, 20);
-  const path = new Path2D(); path.moveTo(PATH[0][0], PATH[0][1]); for (const [x, y] of PATH) path.lineTo(x, y); path.closePath();
-  ctx.lineJoin = "round"; ctx.lineCap = "round";
-  ctx.strokeStyle = "#e0413d"; ctx.lineWidth = HALF * 2 + 10; ctx.stroke(path);                 // zebra vermelha
-  ctx.save(); ctx.setLineDash([14, 14]); ctx.strokeStyle = "#f6f1e6"; ctx.stroke(path); ctx.restore();  // zebra branca
-  ctx.strokeStyle = "#4a4f58"; ctx.lineWidth = HALF * 2; ctx.stroke(path);                     // asfalto
-  ctx.save(); ctx.setLineDash([16, 22]); ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 3; ctx.stroke(path); ctx.restore();
-  // linha de largada/chegada
-  const h = headingAt(0), [sx, sy] = PATH[0];
-  ctx.save(); ctx.translate(sx, sy); ctx.rotate(h);
-  for (let i = -HALF; i < HALF; i += 11) for (let j = 0; j < 2; j++) { ctx.fillStyle = ((i / 11 + j) % 2 === 0) ? "#fff" : "#111"; ctx.fillRect(j * 6 - 6, i, 6, 11); }
-  ctx.restore();
+// ---------- Câmera, HUD, minimapa ----------
+const camTarget = new THREE.Vector3(), lookTarget = new THREE.Vector3();
+function camGoal() {
+  const fx = Math.cos(car.angle), fz = Math.sin(car.angle);
+  camTarget.set(car.x - fx * 70, 38, car.y - fz * 70);
+  lookTarget.set(car.x + fx * 30, 10, car.y + fz * 30);
 }
-function drawBoxes(now) {
-  for (let b = 0; b < BOX_POS.length; b++) {
-    const [x, y] = BOX_POS[b]; const bob = Math.sin(now / 250 + b) * 3;
-    ctx.save(); ctx.translate(x, y + bob); ctx.rotate(now / 900);
-    ctx.globalAlpha = boxes[b] ? 1 : 0.25;
-    ctx.fillStyle = "#ffc857"; ctx.fillRect(-14, -14, 28, 28);
-    ctx.strokeStyle = "#7a5a00"; ctx.lineWidth = 3; ctx.strokeRect(-14, -14, 28, 28);
-    ctx.rotate(-now / 900); ctx.fillStyle = "#1b1f2a"; ctx.font = "800 20px Rubik, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("?", 0, 1);
-    ctx.restore();
-  }
+const mini = $("#mini").getContext("2d");
+function drawMini() {
+  mini.clearRect(0, 0, 192, 120);
+  mini.save(); mini.scale(0.2, 0.2);
+  mini.lineJoin = "round"; mini.lineCap = "round";
+  mini.beginPath(); mini.moveTo(PATH[0][0], PATH[0][1]); for (const [x, y] of PATH) mini.lineTo(x, y); mini.closePath();
+  mini.strokeStyle = "rgba(255,255,255,.55)"; mini.lineWidth = HALF * 2; mini.stroke();
+  for (let b = 0; b < BOX_POS.length; b++) if (boxes[b]) { mini.fillStyle = "#ffc857"; mini.fillRect(BOX_POS[b][0]-12, BOX_POS[b][1]-12, 24, 24); }
+  const dot = (x, y, c, r) => { mini.fillStyle = c; mini.beginPath(); mini.arc(x, y, r, 0, Math.PI*2); mini.fill(); };
+  for (const o of others.values()) dot(o.x, o.y, o.color, 16);
+  dot(car.x, car.y, "#fff", 24); dot(car.x, car.y, me.color, 16);
+  mini.restore();
 }
-function drawKart(x, y, a, color, name, boost, mine) {
-  ctx.save(); ctx.translate(x, y);
-  if (boost) { ctx.rotate(a); const g = ctx.createLinearGradient(-40, 0, -12, 0); g.addColorStop(0, "rgba(255,200,87,0)"); g.addColorStop(1, "rgba(255,200,87,.9)"); ctx.fillStyle = g; ctx.fillRect(-40, -7, 28, 14); ctx.rotate(-a); }
-  ctx.rotate(a);
-  ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(-11, -8 + 3, 24, 16);
-  ctx.fillStyle = "#222"; ctx.fillRect(-10, -10, 7, 4); ctx.fillRect(-10, 6, 7, 4); ctx.fillRect(5, -10, 7, 4); ctx.fillRect(5, 6, 7, 4);
-  ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(-11, -7, 24, 14, 4); ctx.fill();
-  ctx.fillStyle = "#fff"; ctx.fillRect(6, -4, 4, 8);
-  if (mine) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(-12, -8, 26, 16); }
-  ctx.restore();
-  ctx.fillStyle = "#fff"; ctx.font = "600 12px Rubik, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  ctx.shadowColor = "rgba(0,0,0,.7)"; ctx.shadowBlur = 4; ctx.fillText(name, x, y - 16); ctx.shadowBlur = 0;
-}
-function drawHud(now) {
-  const lapText = car.finished ? "Chegou!" : `Volta ${Math.min(car.lap, LAPS)}/${LAPS}`;
+function hud(now) {
   const pos = myPosition(), tot = others.size + 1;
-  ctx.fillStyle = "rgba(20,24,34,.85)"; ctx.beginPath(); ctx.roundRect(14, 14, 212, 62, 12); ctx.fill();
-  ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
-  ctx.font = "800 30px Rubik, sans-serif"; ctx.fillText(`${pos}º`, 28, 45);
-  ctx.font = "600 15px Rubik, sans-serif"; ctx.fillStyle = "#a8adba"; ctx.fillText(`de ${tot}`, 82, 34); ctx.fillStyle = "#fff"; ctx.fillText(lapText, 82, 56);
-  if (now < car.boostUntil) { ctx.fillStyle = "#ffc857"; ctx.font = "800 16px Rubik, sans-serif"; ctx.textAlign = "right"; ctx.fillText("IMPULSO", 946, 32); }
-  if (now < car.stun) { ctx.fillStyle = "#ff4d4d"; ctx.font = "800 16px Rubik, sans-serif"; ctx.textAlign = "right"; ctx.fillText("voltou um trecho", 946, 32); }
+  $("#hudPos").textContent = pos + "º"; $("#hudTot").textContent = "de " + tot;
+  $("#hudLap").textContent = car.finished ? "Chegou!" : `Volta ${Math.min(car.lap, LAPS)}/${LAPS}`;
+  const b = $("#badge");
+  if (now < car.boostUntil) { b.textContent = "IMPULSO"; b.className = ""; }
+  else if (now < car.stun) { b.textContent = "voltou um trecho"; b.className = "bad"; }
+  else if (car.hit && now - car.hit < 500) { b.textContent = "bateu!"; b.className = "bad"; }
+  else b.textContent = "";
 }
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
 
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(2.5, (now - last) / 16.67); last = now;
-  if (phase !== "lobby") {
+  if (phase !== "lobby" && car.mesh) {
     step(dt); net(now);
-    for (const o of others.values()) { o.x += (o.tx - o.x) * 0.35; o.y += (o.ty - o.y) * 0.35; let da = o.tangle - o.angle; da = Math.atan2(Math.sin(da), Math.cos(da)); o.angle += da * 0.35; }
-    drawTrack(); drawBoxes(now);
-    for (const o of others.values()) drawKart(o.x, o.y, o.angle, o.color, o.name, o.boost, false);
-    drawKart(car.x, car.y, car.angle, me.color, "você", now < car.boostUntil, true);
-    drawHud(now);
+    for (const o of others.values()) {
+      o.x += (o.tx - o.x) * 0.35; o.y += (o.ty - o.y) * 0.35;
+      let da = o.tangle - o.angle; da = Math.atan2(Math.sin(da), Math.cos(da)); o.angle += da * 0.35;
+      placeKart(o.mesh, o.x, o.y, o.angle); o.mesh.userData.flame.visible = !!o.boost;
+    }
+    placeKart(car.mesh, car.x, car.y, car.angle);
+    car.mesh.userData.flame.visible = now < car.boostUntil;
+    car.mesh.position.y = Math.abs(car.speed) > 0.5 ? Math.sin(now / 40) * 0.3 : 0;
+    for (let b = 0; b < boxMeshes.length; b++) { const m = boxMeshes[b]; m.rotation.y = now / 800; m.rotation.x = now / 1300; m.position.y = 14 + Math.sin(now / 300 + b) * 2; m.material.opacity = boxes[b] ? 1 : 0.2; }
+    camGoal();
+    camera.position.lerp(camTarget, 0.12);
+    camera.lookAt(lookTarget);
+    const fovGoal = now < car.boostUntil ? 72 : 60; camera.fov += (fovGoal - camera.fov) * 0.1; camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+    drawMini(); hud(now);
   }
   requestAnimationFrame(frame);
 }
