@@ -118,7 +118,7 @@
 const $ = s => document.querySelector(s);
 // Se o jogo estiver publicado separado do servidor (ex.: Netlify + Render), coloque aqui o endereço do servidor.
 // Exemplo: "kart-quiz.onrender.com". Vazio = mesmo endereço da página (rodando local com npm start).
-const SERVER = "https://kartquiz.onrender.com/";
+const SERVER = "";
 const wsHost = SERVER || location.host;
 const proto = SERVER ? "wss://" : (location.protocol === "https:" ? "wss://" : "ws://");
 const ws = new WebSocket(proto + wsHost);
