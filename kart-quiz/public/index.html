@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kart Quiz — corrida de controle de qualidade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1b1f2a; --panel: #262b38; --panel-2: #2f3543; --ink: #f3f1ea; --muted: #a8adba;
+    --flag: #ffc857; --ok: #3ac569; --bad: #ff4d4d; --line: #3b4252;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: Rubik, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; padding: 12px 18px; font-weight: 600; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--flag); outline-offset: 2px; }
+  button.primary { background: var(--flag); color: #1b1f2a; }
+  button.ghost { background: var(--panel-2); color: var(--ink); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input { font: inherit; padding: 12px 14px; border-radius: 10px; border: 2px solid var(--line); background: #11141c; color: var(--ink); width: 100%; }
+  input::placeholder { color: #6b7180; }
+  .hidden { display: none !important; }
+
+  /* Lobby */
+  #lobby { min-height: 100%; display: grid; place-items: center; padding: 24px; }
+  .card { width: min(520px, 100%); background: var(--panel); border-radius: 18px; padding: 28px; }
+  h1 { font-size: 40px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; line-height: 1; }
+  h1 span { display: block; font-size: 16px; font-weight: 400; color: var(--muted); letter-spacing: 0; margin-top: 8px; }
+  .row { display: flex; gap: 10px; margin-top: 12px; }
+  .row > * { flex: 1; }
+  .or { text-align: center; color: var(--muted); margin: 18px 0 6px; }
+  .code { font-size: 56px; font-weight: 800; letter-spacing: .14em; color: var(--flag); text-align: center; margin: 12px 0 2px; }
+  .hint { color: var(--muted); font-size: 14px; text-align: center; margin: 0 0 16px; }
+  ul.players { list-style: none; padding: 0; margin: 12px 0 18px; display: grid; gap: 8px; }
+  ul.players li { display: flex; align-items: center; gap: 12px; background: var(--panel-2); border-radius: 10px; padding: 10px 12px; }
+  ul.players i { width: 16px; height: 16px; border-radius: 4px; display: inline-block; }
+  ul.players small { margin-left: auto; color: var(--muted); }
+  .err { background: #3a2226; color: #ffb3b3; padding: 10px 12px; border-radius: 10px; margin-top: 12px; }
+  .rules { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 16px 0 0; padding-left: 18px; }
+
+  /* Corrida */
+  #race { display: grid; place-items: center; min-height: 100%; padding: 12px; }
+  #stage { position: relative; width: min(960px, 100%); aspect-ratio: 16 / 10; }
+  canvas { width: 100%; height: 100%; display: block; border-radius: 14px; background: #4c9a52; }
+  #overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15,18,26,.6); border-radius: 14px; }
+  .modal { width: min(560px, 92%); background: var(--panel); border-radius: 16px; padding: 22px; }
+  .modal .who { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
+  .modal h2 { font-size: 22px; margin: 0 0 14px; line-height: 1.3; }
+  .timer { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin-bottom: 14px; }
+  .timer i { display: block; height: 100%; background: var(--flag); width: 100%; transform-origin: left; }
+  .opts { display: grid; gap: 8px; }
+  .opts button { text-align: left; background: var(--panel-2); color: var(--ink); padding: 14px 16px; }
+  .opts button.right { background: var(--ok); color: #0f1a12; }
+  .opts button.wrong { background: var(--bad); color: #fff; }
+  .verdict { margin-top: 12px; font-weight: 600; min-height: 22px; }
+  .count { font-size: 140px; font-weight: 800; color: var(--flag); text-shadow: 0 8px 30px rgba(0,0,0,.4); }
+  .results h2 { margin: 0 0 12px; font-size: 26px; }
+  .results ol { margin: 0 0 18px; padding-left: 26px; font-size: 18px; line-height: 1.8; }
+  .results ol li::marker { font-weight: 800; color: var(--flag); }
+  .results i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin-right: 8px; }
+  #touch { display: none; position: absolute; inset: auto 0 0 0; justify-content: space-between; padding: 12px; pointer-events: none; }
+  #touch button { pointer-events: auto; width: 64px; height: 64px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; font-size: 26px; }
+  @media (pointer: coarse) { #touch { display: flex; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<section id="lobby">
+  <div class="card" id="entry">
+    <h1>Kart Quiz <span>Corrida de 3 voltas com perguntas de controle de qualidade.</span></h1>
+    <div class="row" style="margin-top:20px"><input id="name" maxlength="16" placeholder="Seu nome"></div>
+    <div class="row"><button class="primary" id="btnCreate">Criar sala</button></div>
+    <p class="or">ou entre em uma sala</p>
+    <div class="row"><input id="code" maxlength="4" placeholder="Código de 4 letras" style="text-transform:uppercase"><button class="ghost" id="btnJoin">Entrar</button></div>
+    <div class="err hidden" id="err"></div>
+    <ul class="rules">
+      <li>Setas ou WASD para dirigir. Grama deixa o kart lento.</li>
+      <li>Passar por uma caixa <b>?</b> abre uma pergunta para todo mundo.</li>
+      <li>Quem acerta primeiro ganha impulso. Quem erra (ou não responde) volta um trecho.</li>
+    </ul>
+  </div>
+
+  <div class="card hidden" id="waiting">
+    <p class="hint" style="margin:0">Código da sala</p>
+    <div class="code" id="roomCode">----</div>
+    <p class="hint">Todos precisam estar na mesma rede e abrir o mesmo endereço.</p>
+    <ul class="players" id="playerList"></ul>
+    <button class="primary" id="btnStart" style="width:100%">Começar a corrida</button>
+    <p class="hint hidden" id="waitHost" style="margin-top:10px">Esperando quem criou a sala dar a largada…</p>
+  </div>
+</section>
+
+<section id="race" class="hidden">
+  <div id="stage">
+    <canvas id="c" width="960" height="600"></canvas>
+    <div id="overlay" class="hidden"></div>
+    <div id="touch">
+      <div><button data-k="ArrowLeft">◀</button> <button data-k="ArrowRight">▶</button></div>
+      <div><button data-k="ArrowDown">▼</button> <button data-k="ArrowUp">▲</button></div>
+    </div>
+  </div>
+</section>
+
+<script>
+// ---------- Rede ----------
+const $ = s => document.querySelector(s);
+const proto = location.protocol === "https:" ? "wss://" : "ws://";
+const ws = new WebSocket(proto + location.host);
+const sendMsg = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
+
+let me = { id: null, color: "#fff" }, LAPS = 3, isHost = false;
+let others = new Map();          // id -> {name,color,x,y,angle,tx,ty,tangle,lap,finished,boost}
+let phase = "lobby";             // lobby | countdown | racing | question | results
+let boxes = [true, true, true];
+let question = null;
+
+ws.onopen = () => {};
+ws.onclose = () => showError("Conexão perdida. Recarregue a página.");
+ws.onmessage = ev => {
+  const m = JSON.parse(ev.data);
+  switch (m.type) {
+    case "error": showError(m.text); break;
+    case "joined": me.id = m.id; me.color = m.color; LAPS = m.laps;
+      $("#entry").classList.add("hidden"); $("#waiting").classList.remove("hidden"); $("#roomCode").textContent = m.code; break;
+    case "lobby": renderLobby(m); if (m.state === "lobby" && phase === "results") { showLobby(); } break;
+    case "countdown": beginRace(m.players); break;
+    case "go": phase = "racing"; $("#overlay").classList.add("hidden"); break;
+    case "snap": applySnap(m); break;
+    case "box": boxes[m.idx] = m.available; break;
+    case "question": openQuestion(m); break;
+    case "first_correct": if (question) question.first = m.name; break;
+    case "answer_result": markAnswer(m.ok); break;
+    case "question_end": endQuestion(m); break;
+    case "finished": if (m.id === me.id) { car.finished = true; car.rank = m.rank; } break;
+    case "results": showResults(m.ranking); break;
+  }
+};
+
+function showError(t) { const e = $("#err"); e.textContent = t; e.classList.remove("hidden"); }
+$("#btnCreate").onclick = () => sendMsg({ type: "create", name: $("#name").value.trim() });
+$("#btnJoin").onclick = () => sendMsg({ type: "join", name: $("#name").value.trim(), code: $("#code").value });
+$("#code").addEventListener("keydown", e => e.key === "Enter" && $("#btnJoin").click());
+$("#btnStart").onclick = () => sendMsg({ type: "start" });
+
+function renderLobby(m) {
+  const ul = $("#playerList"); ul.innerHTML = "";
+  for (const p of m.players) {
+    if (p.host) isHost = p.id === me.id;
+    const li = document.createElement("li");
+    li.innerHTML = `<i style="background:${p.color}"></i>${esc(p.name)}${p.id === me.id ? " (você)" : ""}<small>${p.host ? "criou a sala" : ""}</small>`;
+    ul.appendChild(li);
+  }
+  $("#btnStart").classList.toggle("hidden", !isHost);
+  $("#waitHost").classList.toggle("hidden", isHost);
+  $("#btnStart").disabled = m.players.length < 1;
+}
+function showLobby() { phase = "lobby"; $("#race").classList.add("hidden"); $("#lobby").classList.remove("hidden"); $("#overlay").classList.add("hidden"); }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------- Pista ----------
+// Linha central definida por pontos de controle, suavizada com Catmull-Rom.
+const CTRL = [[150,300],[200,150],[400,110],[560,175],[700,110],[830,200],[820,380],[680,490],[480,455],[300,500],[160,430]];
+const HALF = 44;           // metade da largura da pista
+const PATH = [];           // pontos amostrados da linha central
+(function build() {
+  const n = CTRL.length, per = 12;
+  for (let i = 0; i < n; i++) {
+    const p0 = CTRL[(i - 1 + n) % n], p1 = CTRL[i], p2 = CTRL[(i + 1) % n], p3 = CTRL[(i + 2) % n];
+    for (let s = 0; s < per; s++) {
+      const t = s / per, t2 = t * t, t3 = t2 * t;
+      const x = .5 * ((2*p1[0]) + (-p0[0]+p2[0])*t + (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2 + (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3);
+      const y = .5 * ((2*p1[1]) + (-p0[1]+p2[1])*t + (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2 + (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3);
+      PATH.push([x, y]);
+    }
+  }
+})();
+const N = PATH.length;
+const CPS = [0, Math.floor(N/4), Math.floor(N/2), Math.floor(3*N/4)];   // checkpoints (índices)
+const BOX_AT = [Math.floor(N*0.28), Math.floor(N*0.55), Math.floor(N*0.82)];
+const BOX_POS = BOX_AT.map(i => PATH[i]);
+
+function nearestIdx(x, y, hint) {
+  // busca local ao redor do índice anterior (rápido) com fallback global
+  let best = -1, bd = Infinity;
+  const scan = i => { const [px, py] = PATH[(i + N) % N]; const d = (px-x)**2 + (py-y)**2; if (d < bd) { bd = d; best = (i + N) % N; } };
+  if (hint != null) for (let k = -8; k <= 8; k++) scan(hint + k); else for (let i = 0; i < N; i++) scan(i);
+  if (bd > 90*90) { bd = Infinity; for (let i = 0; i < N; i++) scan(i); }
+  return { idx: best, dist: Math.sqrt(bd) };
+}
+function headingAt(i) { const a = PATH[i % N], b = PATH[(i + 1) % N]; return Math.atan2(b[1]-a[1], b[0]-a[0]); }
+
+// ---------- Meu kart ----------
+const car = { x: 0, y: 0, angle: 0, speed: 0, idx: 0, lap: 1, nextCp: 1, finished: false, rank: 0, boostUntil: 0, stun: 0 };
+const keys = {};
+addEventListener("keydown", e => { keys[e.key] = true; if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault(); });
+addEventListener("keyup", e => keys[e.key] = false);
+for (const b of document.querySelectorAll("#touch button")) {
+  const k = b.dataset.k;
+  for (const ev of ["pointerdown", "touchstart"]) b.addEventListener(ev, e => { e.preventDefault(); keys[k] = true; });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave", "touchend"]) b.addEventListener(ev, e => { e.preventDefault(); keys[k] = false; });
+}
+
+function spawn(slot) {
+  const i = (N - 6 - slot * 5 + N) % N;
+  const h = headingAt(i), side = (slot % 2 ? 1 : -1) * 18;
+  car.x = PATH[i][0] + Math.cos(h + Math.PI/2) * side;
+  car.y = PATH[i][1] + Math.sin(h + Math.PI/2) * side;
+  car.angle = h; car.speed = 0; car.idx = i; car.lap = 1; car.nextCp = 1; car.finished = false; car.rank = 0; car.boostUntil = 0; car.stun = 0;
+}
+
+function beginRace(players) {
+  others.clear();
+  let slot = 0, mySlot = 0;
+  for (const p of players) { if (p.id === me.id) mySlot = slot; else others.set(p.id, { ...p, tx: p.x, ty: p.y, tangle: p.angle }); slot++; }
+  spawn(mySlot);
+  boxes = [true, true, true];
+  phase = "countdown";
+  $("#lobby").classList.add("hidden"); $("#race").classList.remove("hidden");
+  const ov = $("#overlay"); ov.classList.remove("hidden");
+  let n = 3; ov.innerHTML = `<div class="count">${n}</div>`;
+  const t = setInterval(() => { n--; if (n > 0) ov.innerHTML = `<div class="count">${n}</div>`; else { ov.innerHTML = `<div class="count">VAI!</div>`; clearInterval(t); } }, 1000);
+}
+
+function pushBack() {
+  // volta ~14 pontos da pista, sem mudar a volta ou o checkpoint (o próximo continua sendo o mesmo)
+  const i = (car.idx - 14 + N) % N;
+  car.x = PATH[i][0]; car.y = PATH[i][1]; car.angle = headingAt(i); car.speed = 0; car.idx = i; car.stun = performance.now() + 600;
+}
+
+function step(dt) {
+  if (phase !== "racing" || car.finished) { car.speed *= 0.9; return; }
+  const now = performance.now();
+  const stunned = now < car.stun;
+  const boosted = now < car.boostUntil;
+  const up = keys.ArrowUp || keys.w || keys.W, down = keys.ArrowDown || keys.s || keys.S;
+  const left = keys.ArrowLeft || keys.a || keys.A, right = keys.ArrowRight || keys.d || keys.D;
+
+  const near = nearestIdx(car.x, car.y, car.idx);
+  const onTrack = near.dist <= HALF + 6;
+  const maxSp = (boosted ? 6.2 : 3.9) * (onTrack ? 1 : 0.42);
+
+  if (!stunned) {
+    if (up) car.speed += 0.14 * dt; else if (down) car.speed -= 0.1 * dt; else car.speed *= Math.pow(0.985, dt);
+    if (boosted) car.speed = Math.max(car.speed, maxSp * 0.8);
+    car.speed = Math.max(-1.6, Math.min(maxSp, car.speed));
+    const turn = 0.052 * dt * Math.min(1, Math.abs(car.speed) / 1.5) * (car.speed < 0 ? -1 : 1);
+    if (left) car.angle -= turn; if (right) car.angle += turn;
+  }
+  car.x += Math.cos(car.angle) * car.speed * dt;
+  car.y += Math.sin(car.angle) * car.speed * dt;
+  car.x = Math.max(10, Math.min(950, car.x)); car.y = Math.max(10, Math.min(590, car.y));
+
+  // progresso na volta: só avança se a direção do movimento faz sentido (evita voltar de ré e "pular" checkpoint)
+  const n2 = nearestIdx(car.x, car.y, car.idx);
+  const fwd = ((n2.idx - car.idx) + N) % N;
+  if (fwd < N / 2) car.idx = n2.idx; else if (fwd > N / 2 && (N - fwd) < 20) car.idx = n2.idx;
+
+  const cpTarget = CPS[car.nextCp % 4];
+  const dToCp = ((car.idx - cpTarget) + N) % N;
+  if (dToCp <= 4) {
+    car.nextCp++;
+    if (car.nextCp % 4 === 0) { /* passou pelos 4: cruzou a linha de chegada */ }
+    if (car.nextCp % 4 === 1 && car.nextCp > 1) { car.lap++; if (car.lap > LAPS) car.finished = true; }
+  }
+
+  // caixas
+  for (let b = 0; b < BOX_POS.length; b++) {
+    if (!boxes[b]) continue;
+    const dx = BOX_POS[b][0] - car.x, dy = BOX_POS[b][1] - car.y;
+    if (dx*dx + dy*dy < 24*24) { boxes[b] = false; sendMsg({ type: "pickup", idx: b }); }
+  }
+}
+
+let lastSend = 0;
+function net(now) {
+  if (now - lastSend < 50) return; lastSend = now;
+  if (phase === "racing" || phase === "question") sendMsg({ type: "pos", x: car.x, y: car.y, angle: car.angle, lap: car.lap, prog: car.idx, boost: now < car.boostUntil });
+}
+function applySnap(m) {
+  for (const p of m.players) {
+    if (p.id === me.id) continue;
+    let o = others.get(p.id);
+    if (!o) { o = { ...p, tx: p.x, ty: p.y, tangle: p.angle }; others.set(p.id, o); }
+    o.tx = p.x; o.ty = p.y; o.tangle = p.angle; o.lap = p.lap; o.prog = p.prog; o.finished = p.finished; o.rank = p.rank; o.boost = p.boost; o.name = p.name;
+  }
+  for (const id of [...others.keys()]) if (!m.players.some(p => p.id === id)) others.delete(id);
+}
+function myPosition() {
+  const score = p => (p.finished ? 1e6 - p.rank : p.lap * 10000 + p.prog);
+  const mine = score({ finished: car.finished, rank: car.rank, lap: car.lap, prog: car.idx });
+  let pos = 1; for (const o of others.values()) if (score(o) > mine) pos++;
+  return pos;
+}
+
+// ---------- Perguntas ----------
+function openQuestion(m) {
+  phase = "question"; question = { ...m, answered: false, ok: null, first: null };
+  const ov = $("#overlay"); ov.classList.remove("hidden");
+  ov.innerHTML = `<div class="modal" role="dialog" aria-live="polite">
+    <p class="who">${esc(m.trigger)} pegou uma carta. Quem acertar primeiro ganha impulso.</p>
+    <h2>${esc(m.text)}</h2>
+    <div class="timer"><i id="tbar"></i></div>
+    <div class="opts">${m.options.map((o, i) => `<button data-i="${i}">${esc(o)}</button>`).join("")}</div>
+    <div class="verdict" id="verdict"></div></div>`;
+  if (car.finished) { $("#verdict").textContent = "Você já terminou — só assistindo."; for (const b of ov.querySelectorAll(".opts button")) b.disabled = true; }
+  for (const b of ov.querySelectorAll(".opts button")) b.onclick = () => {
+    if (question.answered) return; question.answered = true; question.pick = +b.dataset.i;
+    sendMsg({ type: "answer", idx: question.pick });
+    for (const x of ov.querySelectorAll(".opts button")) x.disabled = true;
+  };
+  const total = m.deadline - Date.now();
+  const tick = () => { if (!question || question !== q0) return; const left = Math.max(0, m.deadline - Date.now()); const bar = $("#tbar"); if (bar) bar.style.transform = `scaleX(${left / total})`; if (left > 0) requestAnimationFrame(tick); };
+  const q0 = question; tick();
+  // teclas 1-4 respondem
+  question.keyHandler = e => { const i = "1234".indexOf(e.key); if (i >= 0) { const b = ov.querySelector(`.opts button[data-i="${i}"]`); if (b) b.click(); } };
+  addEventListener("keydown", question.keyHandler);
+}
+function markAnswer(ok) {
+  if (!question) return; question.ok = ok;
+  const b = $(`#overlay .opts button[data-i="${question.pick}"]`); if (b) b.classList.add(ok ? "right" : "wrong");
+  $("#verdict").textContent = ok ? "Certo! Esperando os outros…" : "Errou. Você vai voltar um trecho.";
+}
+function endQuestion(m) {
+  if (!question) return;
+  removeEventListener("keydown", question.keyHandler);
+  const res = m.results[me.id];
+  const ov = $("#overlay");
+  const right = ov.querySelector(`.opts button[data-i="${question.options.indexOf(m.correct)}"]`); if (right) right.classList.add("right");
+  let text;
+  if (m.winnerId === me.id) { car.boostUntil = performance.now() + 3200; text = "Você foi o mais rápido — impulso!"; }
+  else if (res === "right") text = m.winnerName ? `Certo, mas ${esc(m.winnerName)} foi mais rápido.` : "Certo!";
+  else if (res === "wrong") { pushBack(); text = "Resposta errada — você voltou um trecho."; }
+  else if (res === "none") { pushBack(); text = "Tempo esgotado — você voltou um trecho."; }
+  else text = m.winnerName ? `${esc(m.winnerName)} ganhou o impulso.` : "Ninguém acertou.";
+  $("#verdict").innerHTML = text;
+  question = null;
+  setTimeout(() => { if (phase === "question") { phase = "racing"; ov.classList.add("hidden"); } }, 1400);
+}
+
+function showResults(ranking) {
+  phase = "results"; question = null;
+  const ov = $("#overlay"); ov.classList.remove("hidden");
+  ov.innerHTML = `<div class="modal results"><h2>Resultado</h2><ol>${ranking.map(r =>
+    `<li><i style="background:${r.color}"></i>${esc(r.name)}${r.finished ? "" : " <small style='color:var(--muted)'>(não terminou)</small>"}</li>`).join("")}</ol>
+    ${isHost ? `<div class="row"><button class="primary" id="again">Correr de novo</button><button class="ghost" id="toLobby">Voltar para a sala</button></div>` : `<p class="hint">Esperando quem criou a sala…</p>`}</div>`;
+  if (isHost) { $("#again").onclick = () => sendMsg({ type: "start" }); $("#toLobby").onclick = () => sendMsg({ type: "back_to_lobby" }); }
+}
+
+// ---------- Desenho ----------
+const cv = $("#c"), ctx = cv.getContext("2d");
+function drawTrack() {
+  ctx.fillStyle = "#4c9a52"; ctx.fillRect(0, 0, 960, 600);
+  // listras de grama sutis
+  ctx.fillStyle = "rgba(255,255,255,.04)"; for (let y = 0; y < 600; y += 40) ctx.fillRect(0, y, 960, 20);
+  const path = new Path2D(); path.moveTo(PATH[0][0], PATH[0][1]); for (const [x, y] of PATH) path.lineTo(x, y); path.closePath();
+  ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.strokeStyle = "#e0413d"; ctx.lineWidth = HALF * 2 + 10; ctx.stroke(path);                 // zebra vermelha
+  ctx.save(); ctx.setLineDash([14, 14]); ctx.strokeStyle = "#f6f1e6"; ctx.stroke(path); ctx.restore();  // zebra branca
+  ctx.strokeStyle = "#4a4f58"; ctx.lineWidth = HALF * 2; ctx.stroke(path);                     // asfalto
+  ctx.save(); ctx.setLineDash([16, 22]); ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 3; ctx.stroke(path); ctx.restore();
+  // linha de largada/chegada
+  const h = headingAt(0), [sx, sy] = PATH[0];
+  ctx.save(); ctx.translate(sx, sy); ctx.rotate(h);
+  for (let i = -HALF; i < HALF; i += 11) for (let j = 0; j < 2; j++) { ctx.fillStyle = ((i / 11 + j) % 2 === 0) ? "#fff" : "#111"; ctx.fillRect(j * 6 - 6, i, 6, 11); }
+  ctx.restore();
+}
+function drawBoxes(now) {
+  for (let b = 0; b < BOX_POS.length; b++) {
+    const [x, y] = BOX_POS[b]; const bob = Math.sin(now / 250 + b) * 3;
+    ctx.save(); ctx.translate(x, y + bob); ctx.rotate(now / 900);
+    ctx.globalAlpha = boxes[b] ? 1 : 0.25;
+    ctx.fillStyle = "#ffc857"; ctx.fillRect(-14, -14, 28, 28);
+    ctx.strokeStyle = "#7a5a00"; ctx.lineWidth = 3; ctx.strokeRect(-14, -14, 28, 28);
+    ctx.rotate(-now / 900); ctx.fillStyle = "#1b1f2a"; ctx.font = "800 20px Rubik, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("?", 0, 1);
+    ctx.restore();
+  }
+}
+function drawKart(x, y, a, color, name, boost, mine) {
+  ctx.save(); ctx.translate(x, y);
+  if (boost) { ctx.rotate(a); const g = ctx.createLinearGradient(-40, 0, -12, 0); g.addColorStop(0, "rgba(255,200,87,0)"); g.addColorStop(1, "rgba(255,200,87,.9)"); ctx.fillStyle = g; ctx.fillRect(-40, -7, 28, 14); ctx.rotate(-a); }
+  ctx.rotate(a);
+  ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(-11, -8 + 3, 24, 16);
+  ctx.fillStyle = "#222"; ctx.fillRect(-10, -10, 7, 4); ctx.fillRect(-10, 6, 7, 4); ctx.fillRect(5, -10, 7, 4); ctx.fillRect(5, 6, 7, 4);
+  ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(-11, -7, 24, 14, 4); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.fillRect(6, -4, 4, 8);
+  if (mine) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(-12, -8, 26, 16); }
+  ctx.restore();
+  ctx.fillStyle = "#fff"; ctx.font = "600 12px Rubik, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  ctx.shadowColor = "rgba(0,0,0,.7)"; ctx.shadowBlur = 4; ctx.fillText(name, x, y - 16); ctx.shadowBlur = 0;
+}
+function drawHud(now) {
+  const lapText = car.finished ? "Chegou!" : `Volta ${Math.min(car.lap, LAPS)}/${LAPS}`;
+  const pos = myPosition(), tot = others.size + 1;
+  ctx.fillStyle = "rgba(20,24,34,.85)"; ctx.beginPath(); ctx.roundRect(14, 14, 212, 62, 12); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.font = "800 30px Rubik, sans-serif"; ctx.fillText(`${pos}º`, 28, 45);
+  ctx.font = "600 15px Rubik, sans-serif"; ctx.fillStyle = "#a8adba"; ctx.fillText(`de ${tot}`, 82, 34); ctx.fillStyle = "#fff"; ctx.fillText(lapText, 82, 56);
+  if (now < car.boostUntil) { ctx.fillStyle = "#ffc857"; ctx.font = "800 16px Rubik, sans-serif"; ctx.textAlign = "right"; ctx.fillText("IMPULSO", 946, 32); }
+  if (now < car.stun) { ctx.fillStyle = "#ff4d4d"; ctx.font = "800 16px Rubik, sans-serif"; ctx.textAlign = "right"; ctx.fillText("voltou um trecho", 946, 32); }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(2.5, (now - last) / 16.67); last = now;
+  if (phase !== "lobby") {
+    step(dt); net(now);
+    for (const o of others.values()) { o.x += (o.tx - o.x) * 0.35; o.y += (o.ty - o.y) * 0.35; let da = o.tangle - o.angle; da = Math.atan2(Math.sin(da), Math.cos(da)); o.angle += da * 0.35; }
+    drawTrack(); drawBoxes(now);
+    for (const o of others.values()) drawKart(o.x, o.y, o.angle, o.color, o.name, o.boost, false);
+    drawKart(car.x, car.y, car.angle, me.color, "você", now < car.boostUntil, true);
+    drawHud(now);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
