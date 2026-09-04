@@ -13,9 +13,12 @@ const LAPS = 5;
 const QUESTION_TIME = 12000;       // ms para responder a carta
 const QUESTION_INTERVAL = 15000;   // ms entre uma carta e outra
 const BOX_RESPAWN = 8000;          // ms até a caixa voltar
-const N_BOXES = 6;
+const N_BOXES = 9;
+const MAX_PLAYERS = 30;
 const HIT_TIME = 1300;             // ms que o atingido fica rodando
 const COLORS = ["#ff4d4d", "#3d8bff", "#3ac569", "#ffc857", "#b46cff", "#ff8c42", "#2ed3d3", "#ff6bd6"];
+// a partir do 9º piloto as cores são geradas girando o matiz, para nunca repetir
+function colorFor(n) { if (n < COLORS.length) return COLORS[n]; const h = (n * 137.508) % 360; return `hsl(${h.toFixed(0)}, 85%, ${n % 2 ? 62 : 48}%)`; }
 
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
@@ -54,7 +57,7 @@ function createRoom(ws, name) {
 
 function joinRoom(ws, room, name, isHost) {
   const p = {
-    id: nextId++, ws, name: (name || "Piloto").slice(0, 16), color: COLORS[room.players.size % COLORS.length],
+    id: nextId++, ws, name: (name || "Piloto").slice(0, 16), color: colorFor(room.players.size),
     x: 0, y: 0, angle: 0, lap: 1, prog: 0, finished: false, rank: 0, boost: false, item: false, room,
   };
   room.players.set(p.id, p);
@@ -150,7 +153,7 @@ wss.on("connection", ws => {
       const r = rooms.get((m.code || "").toUpperCase().trim());
       if (!r) return send(ws, { type: "error", text: "Sala não encontrada. Confere o código com quem criou." });
       if (r.state !== "lobby") return send(ws, { type: "error", text: "Essa corrida já começou. Peça pra criarem outra sala." });
-      if (r.players.size >= COLORS.length) return send(ws, { type: "error", text: "Sala cheia (máximo 8 pilotos)." });
+      if (r.players.size >= MAX_PLAYERS) return send(ws, { type: "error", text: `Sala cheia (máximo ${MAX_PLAYERS} pilotos).` });
       return joinRoom(ws, r, m.name, false);
     }
     if (!room) return;

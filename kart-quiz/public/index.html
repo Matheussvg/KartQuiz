@@ -112,7 +112,7 @@
   <div class="card hidden" id="waiting">
     <p class="hint" style="margin:0">Código da sala</p>
     <div class="code" id="roomCode">----</div>
-    <p class="hint">Passe esse código para os outros pilotos.</p>
+    <p class="hint">Passe esse código para os outros pilotos. Cabem até 30 na sala.</p>
     <ul class="players" id="playerList"></ul>
     <button class="primary" id="btnStart" style="width:100%">Começar a corrida</button>
     <p class="hint hidden" id="waitHost" style="margin-top:10px">Esperando quem criou a sala dar a largada…</p>
@@ -149,7 +149,7 @@ const sendMsg = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
 let me = { id: null, color: "#fff" }, LAPS = 3, isHost = false;
 let others = new Map();
 let phase = "lobby";
-let boxes = [true, true, true, true, true, true];
+let boxes = Array(9).fill(true);
 let question = null;
 
 ws.onclose = () => showError("Conexão perdida. Recarregue a página.");
@@ -196,9 +196,9 @@ function showLobby() { phase = "lobby"; $("#race").classList.add("hidden"); $("#
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 // ---------- Pista (mesma geometria da versão 2D: x = X do mundo, y = Z do mundo) ----------
-const SCALE = 2.2;   // tamanho da pista (a forma vem dos pontos abaixo)
+const SCALE = 2.4;   // tamanho da pista (a forma vem dos pontos abaixo)
 const CTRL = [[150,300],[200,150],[400,110],[560,175],[700,110],[830,200],[820,380],[680,490],[480,455],[300,500],[160,430]].map(([x, y]) => [x * SCALE, y * SCALE]);
-const HALF = 70;     // metade da largura da pista
+const HALF = 110;    // metade da largura da pista
 const PATH = [];
 (function build() {
   const n = CTRL.length, per = 12;
@@ -218,7 +218,7 @@ function headingAt(i) { const a = PATH[(i + N) % N], b = PATH[(i + 1) % N]; retu
 function normalAt(i) { const h = headingAt(i); return [-Math.sin(h), Math.cos(h)]; }   // aponta para a "esquerda" da pista
 // caixas: duas lado a lado em três pontos da pista
 const BOX_POS = [];
-for (const f of [0.28, 0.55, 0.82]) { const i = Math.floor(N * f); const [nx, ny] = normalAt(i); for (const off of [34, -34]) BOX_POS.push([PATH[i][0] + nx*off, PATH[i][1] + ny*off]); }
+for (const f of [0.28, 0.55, 0.82]) { const i = Math.floor(N * f); const [nx, ny] = normalAt(i); for (const off of [-64, 0, 64]) BOX_POS.push([PATH[i][0] + nx*off, PATH[i][1] + ny*off]); }
 function nearestIdx(x, y, hint) {
   let best = -1, bd = Infinity;
   const scan = i => { const [px, py] = PATH[(i + N) % N]; const d = (px-x)**2 + (py-y)**2; if (d < bd) { bd = d; best = (i + N) % N; } };
@@ -280,8 +280,8 @@ for (const s of [1, -1]) {
 }
 // linha de largada
 {
-  const g = new THREE.PlaneGeometry(HALF*2, 12, 12, 2); const c = [];
-  const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const cx = Math.floor((p.getX(i) + HALF) / (HALF/6)), cy = Math.round(p.getY(i) / 6); const k = (cx + cy) % 2 ? 1 : 0.08; c.push(k, k, k); }
+  const g = new THREE.PlaneGeometry(HALF*2, 12, 20, 2); const c = [];
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const cx = Math.floor((p.getX(i) + HALF) / (HALF/10)), cy = Math.round(p.getY(i) / 6); const k = (cx + cy) % 2 ? 1 : 0.08; c.push(k, k, k); }
   g.setAttribute("color", new THREE.Float32BufferAttribute(c, 3));
   const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true }));
   const h = headingAt(0); m.rotation.x = -Math.PI/2; m.rotation.z = -h - Math.PI/2; m.position.set(PATH[0][0], 0.3, PATH[0][1]); scene.add(m);
@@ -356,8 +356,9 @@ for (const b of document.querySelectorAll("#touch button")) {
 }
 
 function spawn(slot) {
-  const row = Math.floor(slot / 2), i = (N - 3 - row + N) % N;
-  const h = headingAt(i), side = (slot % 2 ? 1 : -1) * 30;
+  // grid de largada: 4 colunas, filas de 1 ponto da pista atrás da linha
+  const COLS = 4, row = Math.floor(slot / COLS), i = (N - 3 - row + N) % N;
+  const h = headingAt(i), side = ((slot % COLS) - (COLS - 1) / 2) * (HALF * 2 / (COLS + 0.6));
   car.x = PATH[i][0] + Math.cos(h + Math.PI/2) * side;
   car.y = PATH[i][1] + Math.sin(h + Math.PI/2) * side;
   car.angle = h; car.speed = 0; car.idx = i; car.lap = 1; car.nextCp = 1; car.finished = false; car.rank = 0; car.boostUntil = 0; car.stun = 0; car.item = false; car.hitUntil = 0; cardOpen = false;
@@ -517,8 +518,8 @@ function showResults(ranking) {
 const camTarget = new THREE.Vector3(), lookTarget = new THREE.Vector3();
 function camGoal() {
   const fx = Math.cos(car.angle), fz = Math.sin(car.angle);
-  camTarget.set(car.x - fx * 90, 46, car.y - fz * 90);
-  lookTarget.set(car.x + fx * 40, 10, car.y + fz * 40);
+  camTarget.set(car.x - fx * 100, 54, car.y - fz * 100);
+  lookTarget.set(car.x + fx * 45, 10, car.y + fz * 45);
 }
 const mini = $("#mini").getContext("2d");
 const MB = (() => { const xs = PATH.map(p => p[0]), ys = PATH.map(p => p[1]); const x0 = Math.min(...xs) - HALF, x1 = Math.max(...xs) + HALF, y0 = Math.min(...ys) - HALF, y1 = Math.max(...ys) + HALF;
