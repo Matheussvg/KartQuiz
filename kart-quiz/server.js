@@ -40,37 +40,39 @@ function broadcast(room, msg) { for (const p of room.players.values()) send(p.ws
 
 function playerList(room) {
   return [...room.players.values()].map(p => ({
-    id: p.id, name: p.name, color: p.color, host: p.id === room.hostId,
+    id: p.id, name: p.name, color: p.color, style: p.style, shieldUntil: p.shieldUntil, iceUntil: p.iceUntil, host: p.id === room.hostId,
     x: p.x, y: p.y, angle: p.angle, lap: p.lap, prog: p.prog, finished: p.finished, rank: p.rank, boost: p.boost, item: p.item,
   }));
 }
 
-function createRoom(ws, name) {
+function createRoom(ws, name, style) {
   const room = {
     code: code4(), hostId: null, players: new Map(), state: "lobby",
     boxes: Array.from({ length: N_BOXES }, () => ({ available: true })),
     question: null, usedQuestions: [], finishOrder: [], endTimer: null, cardTimer: null,
   };
   rooms.set(room.code, room);
-  joinRoom(ws, room, name, true);
+  joinRoom(ws, room, name, true, style);
 }
 
-function joinRoom(ws, room, name, isHost) {
+function joinRoom(ws, room, name, isHost, style) {
   const p = {
-    id: nextId++, ws, name: (name || "Piloto").slice(0, 16), color: colorFor(room.players.size),
+    id: nextId++, ws, name: (name || "Piloto").slice(0, 16), color: normalizeStyle(style).color, style: normalizeStyle(style), shieldUntil: 0, iceUntil: 0,
     x: 0, y: 0, angle: 0, lap: 1, prog: 0, finished: false, rank: 0, boost: false, item: false, room,
   };
   room.players.set(p.id, p);
   if (isHost) room.hostId = p.id;
   ws.player = p;
-  send(ws, { type: "joined", id: p.id, code: room.code, color: p.color, laps: LAPS });
+  send(ws, { type: "joined", id: p.id, code: room.code, color: p.color, style: p.style, laps: LAPS });
   broadcast(room, { type: "lobby", players: playerList(room), state: room.state });
 }
 
 function startRace(room) {
+  clearTimeout(room.endTimer); room.endTimer=null; if(room.question) {clearTimeout(room.question.timer);room.question=null;}
+  room.round=(room.round||0)+1;
   room.state = "countdown";
   room.finishOrder = [];
-  for (const p of room.players.values()) { p.lap = 1; p.prog = 0; p.finished = false; p.rank = 0; p.boost = false; p.item = false; }
+  for (const p of room.players.values()) { p.lap = 1; p.prog = 0; p.finished = false; p.rank = 0; p.boost = false; p.item = false; p.shieldUntil = 0; p.iceUntil = 0; }
   clearInterval(room.cardTimer); room.cardTimer = null;
   for (const b of room.boxes) b.available = true;
   broadcast(room, { type: "countdown", players: playerList(room) });
@@ -104,18 +106,30 @@ function closeQuestion(room) {
   broadcast(room, { type: "question_end", correct: qs.q.options[qs.q.answer] });
 }
 
-function useItem(room, p) {
-  if (!p.item || room.state !== "racing" || p.finished) return;
-  p.item = false;
-  const score = x => x.lap * 100000 + x.prog;
-  const mine = score(p);
-  let target = null;
-  for (const x of room.players.values()) {
-    if (x === p || x.finished) continue;
-    if (score(x) > mine && (!target || score(x) < score(target))) target = x;
+const POWERS = ['lightning', 'shield', 'ice', 'pulse'];
+function normalizeStyle(v) {
+  v=v && typeof v==='object'?v:{};
+  return {color:/^#[0-9a-f]{6}$/i.test(v.color)?v.color:'#ff4d64', body:['sport','buggy','classic'].includes(v.body)?v.body:'sport', wheels:['standard','wide','offroad'].includes(v.wheels)?v.wheels:'standard', wing:['none','sport','double'].includes(v.wing)?v.wing:'sport'};
+}
+function useItem(room,p) {
+  if(!p.item || room.state!=='racing' || p.finished) return;
+  const power=p.item; p.item=false;
+  const now=Date.now();
+  if(power==='shield') {
+    p.shieldUntil=now+8000;
+    broadcast(room,{type:'power',power,id:p.id,x:p.x,y:p.y,until:p.shieldUntil}); return;
   }
-  if (!target) return send(p.ws, { type: "item_miss" });
-  broadcast(room, { type: "hit", id: target.id, name: target.name, by: p.name, duration: HIT_TIME });
+  const score=x=>x.lap*100000+x.prog;
+  let targets=[...room.players.values()].filter(x=>x!==p&&!x.finished);
+  if(power==='pulse') targets=targets.filter(x=>Math.hypot(x.x-p.x,x.y-p.y)<=180);
+  else targets=targets.filter(x=>score(x)>score(p)).sort((a,b)=>score(a)-score(b)).slice(0,1);
+  broadcast(room,{type:'power',power,id:p.id,x:p.x,y:p.y,targets:targets.map(x=>({id:x.id,x:x.x,y:x.y}))});
+  if(!targets.length) return send(p.ws,{type:'item_miss'});
+  for(const target of targets) {
+    if(target.shieldUntil>now) {target.shieldUntil=0;broadcast(room,{type:'blocked',id:target.id,x:target.x,y:target.y});continue;}
+    if(power==='ice') {target.iceUntil=now+3000;broadcast(room,{type:'iced',id:target.id,until:target.iceUntil});}
+    else broadcast(room,{type:'hit',id:target.id,name:target.name,by:p.name,duration:power==='pulse'?800:HIT_TIME});
+  }
 }
 
 function handleFinish(room, p) {
@@ -146,22 +160,26 @@ function endRace(room) {
 wss.on("connection", ws => {
   ws.on("message", raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
+    if(!m || typeof m!=='object') return;
     const p = ws.player; const room = p && p.room;
 
-    if (m.type === "create") return createRoom(ws, m.name);
+    if (m.type === "create" && !p) return createRoom(ws, typeof m.name === "string" ? m.name : "Piloto", m.style);
     if (m.type === "join") {
+      if(p || typeof m.code!=="string") return;
       const r = rooms.get((m.code || "").toUpperCase().trim());
       if (!r) return send(ws, { type: "error", text: "Sala não encontrada. Confere o código com quem criou." });
       if (r.state !== "lobby") return send(ws, { type: "error", text: "Essa corrida já começou. Peça pra criarem outra sala." });
       if (r.players.size >= MAX_PLAYERS) return send(ws, { type: "error", text: `Sala cheia (máximo ${MAX_PLAYERS} pilotos).` });
-      return joinRoom(ws, r, m.name, false);
+      return joinRoom(ws, r, typeof m.name === "string" ? m.name : "Piloto", false, m.style);
     }
     if (!room) return;
+    if(m.type==='customize' && room.state==='lobby') {p.style=normalizeStyle(m.style);p.color=p.style.color;send(ws,{type:'customized',style:p.style,color:p.color});broadcast(room,{type:'lobby',players:playerList(room),state:room.state});return;}
 
     if (m.type === "start" && p.id === room.hostId && (room.state === "lobby" || room.state === "results")) return startRace(room);
 
     if (m.type === "pos") {
-      p.x = m.x; p.y = m.y; p.angle = m.angle; p.prog = m.prog; p.boost = !!m.boost;
+      if(room.state!=="racing" || p.finished || ![m.x,m.y,m.angle,m.prog,m.lap].every(Number.isFinite) || !Number.isInteger(m.lap) || m.lap<1 || m.lap>LAPS+1) return;
+      p.x = m.x; p.y = m.y; p.angle = m.angle; p.prog = m.prog; p.boost = false;
       if (m.lap !== p.lap) { p.lap = m.lap; if (p.lap > LAPS) handleFinish(room, p); }
       return;
     }
@@ -169,10 +187,10 @@ wss.on("connection", ws => {
     if (m.type === "pickup" && room.state === "racing" && !p.finished) {
       const b = room.boxes[m.idx];
       if (!b || !b.available || p.item) return;
-      b.available = false; p.item = true;
+      b.available = false; p.item = POWERS[Math.floor(Math.random()*POWERS.length)];
       broadcast(room, { type: "box", idx: m.idx, available: false });
-      send(ws, { type: "item" });
-      setTimeout(() => { b.available = true; broadcast(room, { type: "box", idx: m.idx, available: true }); }, BOX_RESPAWN);
+      send(ws, { type: "item", power:p.item });
+      const round=room.round; setTimeout(() => { if(room.round!==round || room.state!=="racing") return; b.available = true; broadcast(room, { type: "box", idx: m.idx, available: true }); }, BOX_RESPAWN);
       return;
     }
 
@@ -180,14 +198,14 @@ wss.on("connection", ws => {
 
     if (m.type === "answer" && room.question && !p.finished) {
       const qs = room.question;
-      if (qs.answers.has(p.id)) return;
+      if (qs.answers.has(p.id) || Date.now()>qs.deadline || !Number.isInteger(m.idx) || m.idx<0 || m.idx>=qs.q.options.length) return;
       const ok = m.idx === qs.q.answer;
       qs.answers.set(p.id, ok);
       send(ws, { type: "answer_result", ok, correct: qs.q.options[qs.q.answer] });
       return;
     }
 
-    if (m.type === "back_to_lobby" && p.id === room.hostId) {
+    if (m.type === "back_to_lobby" && p.id === room.hostId && room.state === "results") {
       room.state = "lobby";
       clearInterval(room.cardTimer); room.cardTimer = null;
       for (const x of room.players.values()) { x.lap = 1; x.prog = 0; x.finished = false; x.rank = 0; }
@@ -199,7 +217,7 @@ wss.on("connection", ws => {
     const p = ws.player; if (!p) return;
     const room = p.room;
     room.players.delete(p.id);
-    if (room.players.size === 0) { clearTimeout(room.endTimer); clearInterval(room.cardTimer); rooms.delete(room.code); return; }
+    if (room.players.size === 0) { room.state="closed"; if(room.question) clearTimeout(room.question.timer); clearTimeout(room.endTimer); clearInterval(room.cardTimer); rooms.delete(room.code); return; }
     if (room.hostId === p.id) room.hostId = room.players.keys().next().value;
     broadcast(room, { type: "lobby", players: playerList(room), state: room.state, left: p.name });
   });

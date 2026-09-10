@@ -1,58 +1,47 @@
-# Kart Quiz
+# Kart Quiz — garagem e poderes (v6)
 
-Corrida de kart 3D multiplayer no navegador. Um aluno cria a sala, os outros entram com o
-código, quem criou dá a largada. Todos largam juntos em grid de 2 colunas. 5 voltas, pista larga
-com barreiras nas laterais.
+Base: versão 4 enviada pelo usuário. A pista, as perguntas, a direção e as regras do quiz foram preservadas.
 
-- **Caixa "?"** dá um raio. Espaço (ou o botão ⚡ no celular) derruba quem está imediatamente
-  na sua frente — o kart dele roda e fica parado ~1 segundo. Só dá para carregar um raio por vez.
-- **Carta de pergunta** (ás de espadas) aparece na tela de todos a cada 15 segundos de corrida.
-  Enquanto a carta está aberta o kart fica parado. Acertou, a carta some na hora e você segue.
-  Errou ou deixou os 12 segundos passarem, volta um trecho da pista.
+## Regras
+- 5 voltas e até 30 jogadores por sala.
+- Perguntas a cada 15 segundos, com 12 segundos para responder.
+- O kart para durante a pergunta. Acerto permite continuar; erro ou tempo esgotado faz voltar um trecho.
+- Sem turbo, drift ou piloto automático.
+- Encostar na barreira não reduz a velocidade nem produz efeitos de batida. O limite mantém o kart dentro da pista e alinha suavemente a direção.
 
-## Rodar (precisa do Node.js 18 ou mais novo)
+## Garagem
+Clique em Personalizar meu kart no menu ou na sala de espera. Escolha pintura, carroceria (esportivo, buggy ou clássico), rodas (pista, largas ou todo-terreno) e aerofólio (nenhum, esportivo ou duplo). Salve para aplicar.
 
-```
-npm install
-npm start
-```
+A prévia é 3D, as escolhas ficam salvas neste navegador quando o armazenamento está disponível e os outros participantes veem o mesmo kart. Todas as peças são cosméticas, sem diferenças de desempenho. As alterações são permitidas antes da largada.
 
-O terminal mostra dois endereços. Os alunos abrem no Chrome o endereço "na mesma rede Wi-Fi"
-(algo como `http://192.168.0.15:3000`). Todos precisam estar no mesmo Wi-Fi do computador
-que está rodando o servidor. Até 8 pilotos por sala.
+## Caixas prismáticas e poderes
+As caixas flutuam e giram, com seis faces coloridas em gradiente prismático. Cada coleta sorteia um dos quatro poderes com chances iguais. Um poder por vez; a caixa reaparece após 8 segundos.
 
-Se o firewall do Windows perguntar, permita o Node.js em redes privadas.
+| Poder | Efeito | Visual |
+|---|---|---|
+| Raio | Derruba por 1,3s o piloto imediatamente à frente na classificação | Raio vertical e faíscas |
+| Escudo | Bloqueia um ataque durante até 8s; desaparece ao bloquear | Bolha azul translúcida e partículas |
+| Gelo | Reduz por 3s a velocidade máxima do piloto imediatamente à frente | Projétil azul e cristais ao redor do kart |
+| Onda de choque | Faz girar por 0,8s os adversários num raio de 180 unidades | Anel rosa que se expande |
+
+Os poderes não alteram as penalidades do quiz. Raio e gelo escolhem o alvo pela posição na corrida; a onda usa a distância na pista. O poder é consumido mesmo sem alvo, com aviso na tela.
 
 ## Controles
+WASD ou setas para dirigir. Espaço para usar o poder. Teclas 1–4 para responder. Em telas de toque, use os botões da pista e do poder.
 
-Setas ou WASD. Teclas 1 a 4 respondem a pergunta. Em celular aparecem botões na tela.
+## Render: substituir a versão antiga
+O ZIP contém a pasta **kart-quiz**. No GitHub, substitua o conteúdo da pasta antiga **kart-quiz** pelos arquivos desta entrega. Inclua todos os arquivos de public, inclusive kart.js, garage.js e vendor.
 
-## Perguntas
+No serviço existente do Render, use:
+- Root Directory: `kart-quiz`
+- Build Command: `npm ci`
+- Start Command: `npm start`
 
-Estão em `questions.js`. Cada uma tem `q` (texto), `options` (4 alternativas) e `answer`
-(índice da correta, começando em 0). É só adicionar mais no mesmo formato e reiniciar o servidor.
+Se você havia alterado Root Directory para kart-quiz-v5, volte para kart-quiz. Publique o commit atualizado. Não envie node_modules. Não é necessário criar outro serviço nem mudar o endereço do jogo.
 
-## Ajustes rápidos (server.js)
+Para testar no computador, abra esta pasta no terminal e execute `npm ci` e `npm start`. Acesse http://localhost:3000. A biblioteca Three.js acompanha o projeto com sua licença.
 
-- `LAPS` — número de voltas
-- `QUESTION_INTERVAL` — intervalo entre cartas (em ms)
-- `QUESTION_TIME` — tempo para responder a carta (em ms)
-- `BOX_RESPAWN` — tempo até a caixa reaparecer
-- `HIT_TIME` — quanto tempo o derrubado fica rodando
+## Verificações
+Testes passaram para as 27 combinações de peças, os quatro efeitos visuais e sua limpeza, bloqueio do escudo, alcance da onda, gelo, raio, sincronização da personalização, coleta aleatória, reinício e regras originais do quiz. Integração verificada com dois clientes WebSocket locais. Garagem e corrida inspecionadas no navegador.
 
-No `public/index.html`: `SCALE` muda o tamanho da pista, `HALF` a largura, `CTRL` são os pontos
-que desenham o traçado. Os números `90` e `46` em `camGoal` são distância e altura da câmera.
-
-## Publicar (Netlify + Render)
-
-O Netlify só hospeda a parte estática (o jogo). O servidor precisa rodar em outro lugar.
-
-1. Suba o projeto no GitHub.
-2. **Render** (render.com): New → Web Service → conecte o repositório. Build: `npm install`.
-   Start: `npm start`. Plano Free. Anote o endereço, tipo `kart-quiz.onrender.com`.
-3. Abra `public/index.html` e preencha `const SERVER = "kart-quiz.onrender.com";` (sem https://).
-4. **Netlify**: New site → mesmo repositório. O `netlify.toml` já aponta para a pasta `public`.
-5. Compartilhe o link do Netlify com os alunos.
-
-No plano grátis do Render o servidor dorme após 15 min parado e leva ~40 s para acordar.
-Abra o link uns minutos antes da aula.
+Ainda não houve teste de carga com 30 jogadores nem teste em celular físico. O servidor continua recebendo posições calculadas pelo cliente, como na versão original. Esta entrega não publica automaticamente no Render.
