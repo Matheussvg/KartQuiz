@@ -326,7 +326,18 @@ function rainbowHeight(i){return 24+Math.sin(i*.12)*170+Math.sin(i*.035)*90;}
 function showRainbowWarning(title){cardOpen=true;const e=$("#trackEvent");e.classList.remove('hidden');$('#trackEventTitle').firstChild.textContent=title;$('#trackEventSub').textContent='A pista está se desmontando...';setTimeout(()=>{if(e)e.classList.add('hidden');},4800);}
 function enterRainbowTrack(){makeRainbowTrack();rainbowMode=false;rainbowRising=true;rainbowRiseStart=performance.now();rainbowGroup.position.y=-420;rainbowProgress=0;cardOpen=true;const e=$("#trackEvent");e.classList.remove('hidden');$('#trackEventTitle').firstChild.textContent='A ponte está subindo';$('#trackEventSub').textContent='A pista antiga se abre — acesso pela esquerda';car.speed=0;setTimeout(()=>e.classList.add('hidden'),4700);}
 function finishRainbowRise(){rainbowMode=true;rainbowRising=false;rainbowGroup.position.y=0;rainbowProgress=0;cardOpen=false;car.x=RAIN_PATH[0][0]+rainbowOx;car.y=RAIN_PATH[0][1]+rainbowOz;car.angle=0;car.speed=0;car.idx=0;car.rainbowY=rainbowHeight(0);flash('Ponte arco-íris!');}
-function stepRainbow(dt){if(cardOpen||car.finished)return;const target=RAIN_PATH[Math.min(RAIN_N-1,Math.floor(rainbowProgress))];const next=RAIN_PATH[Math.min(RAIN_N-1,Math.floor(rainbowProgress)+1)];car.angle=Math.atan2(next[1]-target[1],next[0]-target[0]);car.speed=Math.min(4.2,car.speed+.12*dt);rainbowProgress+=car.speed*dt*.72;car.x=target[0]+rainbowOx;car.y=target[1]+rainbowOz;car.rainbowY=rainbowHeight(Math.floor(rainbowProgress));for(const g of ghostObstacles){const gi=Math.round((g.position.x+1250)/15);g.position.y=rainbowHeight(gi)+34+Math.sin(performance.now()/300+g.userData.phase)*7;const dx=g.position.x+rainbowOx-car.x,dz=g.position.z+rainbowOz-car.y;if(Math.hypot(dx,dz)<32)car.speed=Math.max(1.1,car.speed-.7);g.rotation.y+=.02*dt;}if(rainbowProgress>=RAIN_N-1){car.lap=6;car.finished=true;sendMsg({type:'pos',x:car.x,y:car.y,angle:car.angle,lap:6,prog:RAIN_N-1,rainbow:true});}}
+function nearestRainbowPoint(wx,wz){let best={dist:Infinity,idx:0,x:0,z:0};for(let i=0;i<RAIN_N-1;i++){const a=RAIN_PATH[i],b=RAIN_PATH[i+1],ax=a[0]+rainbowOx,az=a[1]+rainbowOz,bx=b[0]+rainbowOx,bz=b[1]+rainbowOz,dx=bx-ax,dz=bz-az,len=dx*dx+dz*dz,t=Math.max(0,Math.min(1,((wx-ax)*dx+(wz-az)*dz)/len)),px=ax+dx*t,pz=az+dz*t,d=Math.hypot(wx-px,wz-pz);if(d<best.dist)best={dist:d,idx:i,x:px,z:pz};}return best;}
+function stepRainbow(dt){
+  if(cardOpen||car.finished){car.speed*=.9;return;}
+  const now=performance.now(),stunned=now<car.stun||now<car.hitUntil,up=keys.ArrowUp||keys.w||keys.W,down=keys.ArrowDown||keys.s||keys.S,left=keys.ArrowLeft||keys.a||keys.A,right=keys.ArrowRight||keys.d||keys.D;
+  if(!stunned){if(up)car.speed+=.14*dt;else if(down)car.speed-=.12*dt;else car.speed*=Math.pow(.985,dt);car.speed=Math.max(-1.2,Math.min(4.8,car.speed));const steer=((right?1:0)-(left?1:0))*.052*dt*Math.min(1,Math.abs(car.speed)/1.4);car.angle+=steer*(car.speed<0?-1:1);}
+  car.x+=Math.cos(car.angle)*car.speed*dt;car.y+=Math.sin(car.angle)*car.speed*dt;
+  const near=nearestRainbowPoint(car.x,car.y),limit=101;
+  if(near.dist>limit){const dx=(car.x-near.x)/near.dist,dz=(car.y-near.z)/near.dist;car.x=near.x+dx*limit;car.y=near.z+dz*limit;const h=Math.atan2(RAIN_PATH[Math.min(RAIN_N-1,near.idx+1)][1]-RAIN_PATH[near.idx][1],RAIN_PATH[Math.min(RAIN_N-1,near.idx+1)][0]-RAIN_PATH[near.idx][0]);const d=Math.atan2(Math.sin(h-car.angle),Math.cos(h-car.angle));car.angle+=d*.3;}
+  rainbowProgress=Math.max(rainbowProgress,near.idx);car.rainbowY=rainbowHeight(Math.min(RAIN_N-1,Math.floor(rainbowProgress)));
+  for(const g of ghostObstacles){const gi=Math.round((g.position.x+1250)/15);g.position.y=rainbowHeight(gi)+34+Math.sin(now/300+g.userData.phase)*7;const dx=g.position.x+rainbowOx-car.x,dz=g.position.z+rainbowOz-car.y;if(Math.hypot(dx,dz)<32){car.speed=Math.max(1.1,car.speed-.7);car.hit=now;}g.rotation.y+=.02*dt;}
+  if(near.idx>=RAIN_N-2&&car.speed>0){car.lap=6;car.finished=true;sendMsg({type:'pos',x:car.x,y:car.y,angle:car.angle,lap:6,prog:RAIN_N-1,rainbow:true});}
+}
 
 // faixa (strip) genérica ao longo da pista: fa(i), fb(i) devolvem [x, y, z]; colorFn(i) devolve cor hex por segmento
 function strip(fa, fb, colorFn, material) {
@@ -494,7 +505,7 @@ function step(dt) {
 let lastSend = 0;
 function net(now) {
   if (now - lastSend < 50) return; lastSend = now;
-  if (phase === "racing") sendMsg({ type: "pos", x: car.x, y: car.y, angle: car.angle, lap: car.lap, prog: car.idx, rainbow: rainbowMode });
+  if (phase === "racing") sendMsg({ type: "pos", x: car.x, y: car.y, angle: car.angle, lap: car.lap, prog: rainbowMode ? Math.floor(rainbowProgress) : car.idx, rainbow: rainbowMode });
 }
 function applySnap(m) {
   for (const p of m.players) {

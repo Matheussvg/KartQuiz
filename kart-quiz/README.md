@@ -65,3 +65,7 @@ O aviso inicial diz apenas “Quarta volta”. Depois os jogadores ficam parados
 
 ## Ajuste após teste de vídeo
 O mapa arco-íris agora é ancorado dinamicamente na frente do kart que chega à quarta volta. Isso evita que a ponte apareça atrás ou fora da câmera. Durante o aviso, o jogador continua na pista original; a ponte é criada à frente e sobe do subsolo. Depois da subida, o kart entra no primeiro ponto da ponte, sem concluir a corrida fora dela.
+
+
+## Ponte arco-íris jogável
+A ponte deixou de conduzir o kart automaticamente. O jogador controla aceleração, ré e direção com WASD ou setas, enquanto a câmera acompanha o traçado. O limite das barreiras usa a mesma largura útil da pista normal; o contato com fantasmas reduz a velocidade por um instante. A chegada só é enviada no último segmento.
