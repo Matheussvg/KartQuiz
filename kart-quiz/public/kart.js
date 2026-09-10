@@ -6,7 +6,20 @@ window.buildKart = function(style={}) {
  const ball=(mat,x,y,z,sx,sy,sz)=>{const m=add(new T.SphereGeometry(1,20,12),mat,x,y,z);m.scale.set(sx,sy,sz);return m;};
  const box=(mat,x,y,z,sx,sy,sz)=>add(new T.BoxGeometry(sx,sy,sz),mat,x,y,z);
  const buggy=style.body==='buggy', classic=style.body==='classic',monster=style.body==='monster',italian=style.body==='italian',formula=style.body==='formula';
- if(monster){box(paint,-2,9,0,29,9,20);box(paint,11,11,0,12,6,19);box(dark,-10,14,0,10,1,16);for(const z of [-8,8])box(chrome,1,6,z,26,1.5,1.5);}
+ if(style.body==='rally'){
+  box(paint,0,8,0,33,8,20);box(dark,-7,12,0,12,3,16);
+  for(const z of [-8,-3,3,8]){ball(chrome,18,10,z,2,2.4,2.4);ball(white,19.5,10,z,.6,1.8,1.8);}
+  for(const z of [-11,11])box(dark,0,5,z,32,3,2);
+  box(white,12,12.2,0,12,.4,4);
+ }else if(style.body==='rocket'){
+  ball(paint,3,8,0,22,5,9);ball(chrome,21,8,0,5,3,5);
+  for(const z of [-9,9]){const pod=add(new T.CylinderGeometry(3,4,16,16),chrome,-7,9,z);pod.rotation.z=Math.PI/2;ball(new T.MeshBasicMaterial({color:0x66eaff}),-15.5,9,z,.7,2.6,2.6);}
+ }else if(style.body==='pickup'){
+  box(paint,10,8,0,17,8,20);box(dark,-12,7,0,12,2,17);
+  for(const z of [-9,9])box(paint,-12,10,z,13,6,2);box(paint,-18,10,0,2,6,20);
+  for(const z of [-6,6])box(white,19,9,z,1,3,4);
+ }
+ else if(monster){box(paint,-2,9,0,29,9,20);box(paint,11,11,0,12,6,19);box(dark,-10,14,0,10,1,16);for(const z of [-8,8])box(chrome,1,6,z,26,1.5,1.5);}
  else if(italian){
   const shape=new T.Shape();shape.moveTo(-16,-10);shape.lineTo(12,-10);shape.lineTo(23,-7);shape.lineTo(23,7);shape.lineTo(12,10);shape.lineTo(-16,10);shape.closePath();
   const shell=add(new T.ExtrudeGeometry(shape,{depth:4,bevelEnabled:true,bevelSize:1,bevelThickness:1,bevelSegments:2,steps:1}),paint,0,8,0);shell.rotation.x=Math.PI/2;
@@ -20,9 +33,9 @@ window.buildKart = function(style={}) {
   const pipe=add(new T.CylinderGeometry(1.4,1.4,7,12),chrome,-14,6,side*5);pipe.rotation.z=Math.PI/2;
  }
  box(dark,-5,10,0,8,9,9);
- const rimColor=style.wheels==='offroad'?0xffcf54:0xdce9f6;
+ const rimColor=['offroad','gold'].includes(style.wheels)?0xffcf54:style.wheels==='cyber'?0x292440:0xdce9f6;
  const rim=new T.MeshPhongMaterial({color:rimColor,shininess:100});
- const r=style.wheels==='monster'?8.2:style.wheels==='offroad'?6.2:5.2, width=['wide','monster'].includes(style.wheels)?6:4.5;
+ const r=style.wheels==='monster'?8.2:style.wheels==='offroad'?6.2:5.2, width=['wide','monster','slick'].includes(style.wheels)?6:4.5;
  g.userData.wheels=[];
  for(const x of [-10,11]) for(const side of [-1,1]) {
   const wg=new T.Group();wg.position.set(x,r,side*12);g.add(wg);
@@ -31,6 +44,11 @@ window.buildKart = function(style={}) {
   for(let i=0;i<5;i++) {const spoke=new T.Mesh(new T.BoxGeometry(r*.8,1,width+.5),dark);spoke.rotation.z=i*Math.PI/5;wg.add(spoke);}
   if(['offroad','monster'].includes(style.wheels)) for(let i=0;i<12;i++){const a=i*Math.PI/6,tread=new T.Mesh(new T.BoxGeometry(2,1.3,width+.4),rubber);tread.position.set(Math.cos(a)*r,Math.sin(a)*r,0);tread.rotation.z=a-Math.PI/2;wg.add(tread);}
   if(style.wheels==='neon'||style.wheels==='retro'){const band=new T.Mesh(new T.TorusGeometry(r*.78,style.wheels==='retro'?.8:.4,6,20),new T.MeshBasicMaterial({color:style.wheels==='neon'?0x58ffee:0xffffff}));band.position.z=side*(width/2+.3);wg.add(band);}
+  if(style.wheels==='cyber'){
+    const disc=new T.Mesh(new T.CylinderGeometry(r*.72,r*.72,.5,24),new T.MeshBasicMaterial({color:0xb775ff}));disc.rotation.x=Math.PI/2;disc.position.z=side*(width/2+.5);wg.add(disc);
+    const center=new T.Mesh(new T.TorusGeometry(r*.45,.35,6,24),white);center.position.z=side*(width/2+.9);wg.add(center);
+  }
+  if(style.wheels==='slick')for(const sign of [-1,1]){const stripe=new T.Mesh(new T.TorusGeometry(r*.85,.22,6,24),new T.MeshBasicMaterial({color:0xffdf55}));stripe.position.z=sign*(width/2+.2);wg.add(stripe);}
   g.userData.wheels.push(wg);
  }
  // Personagens originais com silhuetas reconhecíveis também por trás.
@@ -58,7 +76,12 @@ window.buildKart = function(style={}) {
  for(const side of [-1,1]){ball(character==='driver'?white:skin,3,14,side*4,2,2,2);box(character==='driver'?paint:skin,0,14,side*4,6,2.8,2.8);}
  const steer=add(new T.TorusGeometry(3.2,.55,8,16),dark,5,14,0);steer.rotation.y=Math.PI/2;steer.rotation.z=-.4;
  box(chrome,20,4,0,3,3,23);box(chrome,-17,4,0,3,3,23);
- if(style.wing!=='none') {
+ if(style.wing==='shark'){
+  const shape=new T.Shape();shape.moveTo(-8,0);shape.lineTo(4,0);shape.lineTo(-5,14);shape.closePath();
+  add(new T.ExtrudeGeometry(shape,{depth:1.6,bevelEnabled:false}),paint,-9,12,-.8);
+ }else if(style.wing==='jet'){
+  for(const side of [-1,1]){const wing=box(paint,-13,15,side*13,10,1.5,17);wing.rotation.y=side*.35;box(chrome,-14,10,side*6,1.4,10,1.4);ball(new T.MeshBasicMaterial({color:0x65eeff}),-15,15,side*21,2,.8,1);}
+ }else if(style.wing!=='none') {
   for(const side of [-1,1]) box(chrome,-14,11,side*7,1.3,10,1.3);
   box(paint,-14,16,0,6,2,28);box(white,-14,17.1,0,3,.3,26);
   if(style.wing==='double') {box(paint,-14,21,0,6,1.5,28);for(const side of [-1,1])box(paint,-14,18,side*13,6,7,1.4);}

@@ -3,7 +3,7 @@
  let saved;try{saved=JSON.parse(localStorage.getItem('kart-style-v6'));}catch{}
  window.kartStyle={...defaults,...(saved&&typeof saved==='object'?saved:{})};
  if(!/^#[0-9a-f]{6}$/i.test(window.kartStyle.color))window.kartStyle.color=defaults.color;
- for(const [key,allowed] of Object.entries({character:['driver','monkey','turtle','rabbit'],body:['sport','buggy','classic','italian','monster','formula'],wheels:['standard','wide','offroad','monster','neon','retro'],wing:['none','sport','double']}))if(!allowed.includes(window.kartStyle[key]))window.kartStyle[key]=defaults[key];
+ for(const [key,allowed] of Object.entries({character:['driver','monkey','turtle','rabbit'],body:['sport','buggy','classic','italian','monster','formula','rally','rocket','pickup'],wheels:['standard','wide','offroad','monster','neon','retro','gold','cyber','slick'],wing:['none','sport','double','shark','jet']}))if(!allowed.includes(window.kartStyle[key]))window.kartStyle[key]=defaults[key];
  let renderer,scene,camera,kart,open=false;
  const fields={color:$('#kartColor'),body:$('#kartBody'),wheels:$('#kartWheels'),wing:$('#kartWing'),character:$('#kartCharacter')};
  const getDraft=()=>Object.fromEntries(Object.entries(fields).map(([k,e])=>[k,e.value]));

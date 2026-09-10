@@ -130,7 +130,7 @@ function closeQuestion(room) {
 const POWERS = ['lightning', 'shield', 'ice', 'pulse'];
 function normalizeStyle(v) {
   v=v && typeof v==='object'?v:{};
-  return {character:['driver','monkey','turtle','rabbit'].includes(v.character)?v.character:'driver',color:/^#[0-9a-f]{6}$/i.test(v.color)?v.color:'#ff4d64', body:['sport','buggy','classic','italian','monster','formula'].includes(v.body)?v.body:'sport', wheels:['standard','wide','offroad','monster','neon','retro'].includes(v.wheels)?v.wheels:'standard', wing:['none','sport','double'].includes(v.wing)?v.wing:'sport'};
+  return {character:['driver','monkey','turtle','rabbit'].includes(v.character)?v.character:'driver',color:/^#[0-9a-f]{6}$/i.test(v.color)?v.color:'#ff4d64', body:['sport','buggy','classic','italian','monster','formula','rally','rocket','pickup'].includes(v.body)?v.body:'sport', wheels:['standard','wide','offroad','monster','neon','retro','gold','cyber','slick'].includes(v.wheels)?v.wheels:'standard', wing:['none','sport','double','shark','jet'].includes(v.wing)?v.wing:'sport'};
 }
 function useItem(room,p) {
   if(!p.item || room.state!=='racing' || p.finished) return;
