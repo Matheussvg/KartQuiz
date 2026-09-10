@@ -195,8 +195,8 @@ wss.on("connection", ws => {
     if (m.type === "pos") {
       if(room.state!=="racing" || p.finished || ![m.x,m.y,m.angle,m.prog,m.lap].every(Number.isFinite) || !Number.isInteger(m.lap) || m.lap<1 || m.lap>LAPS+1) return;
       p.x = m.x; p.y = m.y; p.angle = m.angle; p.prog = m.prog; p.boost = false; p.rainbow = !!m.rainbow;
-      if (!room.rainbow && p.lap >= 4) beginRainbow(room);
       if (m.lap !== p.lap) { p.lap = m.lap; if (p.lap > LAPS) handleFinish(room, p); }
+      if (!room.rainbow && p.lap >= 4) beginRainbow(room);
       return;
     }
 

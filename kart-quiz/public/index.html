@@ -302,7 +302,9 @@ const RAIN_N = 180, RAIN_PATH = Array.from({length:RAIN_N},(_,i)=>[-1250+i*15, M
 function makeRainbowTrack(){
   rainbowGroup=new THREE.Group(); scene.add(rainbowGroup);
   const mats=[0xff4d79,0xffa63d,0xffe44d,0x72e35d,0x52dbff,0x6d7cff,0xd55cff];
-  mats.forEach((c,j)=>{const off=(j-3)*8;const g=new THREE.BufferGeometry(),pos=[];for(let i=0;i<RAIN_N;i++){const [x,z]=RAIN_PATH[i];pos.push(x,10+Math.sin(i*.12)*170+Math.sin(i*.035)*90+off,z); }g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));rainbowGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:c,linewidth:4})));});
+  mats.forEach((c,j)=>{const off=(j-3)*8;const g=new THREE.BufferGeometry(),pos=[];for(let i=0;i<RAIN_N;i++){const [x,z]=RAIN_PATH[i];const deck=24+Math.sin(i*.12)*170+Math.sin(i*.035)*90;pos.push(x,deck,z+off); }g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));rainbowGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:c,linewidth:4})));});
+  const railMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.75});
+  for(const side of [-1,1]) { const g=new THREE.BufferGeometry(),pos=[]; for(let i=0;i<RAIN_N;i++){const [x,z]=RAIN_PATH[i];const deck=24+Math.sin(i*.12)*170+Math.sin(i*.035)*90;pos.push(x,deck+18,z+side*52);}g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));rainbowGroup.add(new THREE.Line(g,railMat)); }
   const starMat=new THREE.MeshBasicMaterial({color:0xfff6b5});
   for(let i=0;i<150;i++){const s=new THREE.Mesh(new THREE.SphereGeometry(2+(i%3),6,4),starMat);s.position.set(-1450+(i*97)%2900,380+(i*53)%420,-550+(i*137)%1100);rainbowGroup.add(s);}
   const ghostMat=new THREE.MeshPhongMaterial({color:0xb98cff,emissive:0x3d1d72,transparent:true,opacity:.88});
@@ -310,9 +312,10 @@ function makeRainbowTrack(){
   scene.background=new THREE.Color(0x070b2b);scene.fog=new THREE.Fog(0x070b2b,900,2800);
 }
 function RainZ(i){return RAIN_PATH[i][1];}
+function rainbowHeight(i){return 24+Math.sin(i*.12)*170+Math.sin(i*.035)*90;}
 function showRainbowWarning(title){cardOpen=true;const e=$("#trackEvent");e.classList.remove('hidden');$('#trackEventTitle').firstChild.textContent=title;$('#trackEventSub').textContent='A pista está se desmontando...';setTimeout(()=>{if(e)e.classList.add('hidden');},4800);}
 function enterRainbowTrack(){makeRainbowTrack();rainbowMode=true;rainbowProgress=0;cardOpen=false;const e=$("#trackEvent");e.classList.remove('hidden');$('#trackEventTitle').firstChild.textContent='Ponte arco-íris';$('#trackEventSub').textContent='Desvie dos pequenos fantasmas!';setTimeout(()=>e.classList.add('hidden'),2600);car.x=RAIN_PATH[0][0];car.y=RAIN_PATH[0][1];car.angle=0;car.speed=0;car.idx=0;flash('Ponte arco-íris!');}
-function stepRainbow(dt){if(cardOpen||car.finished)return;const target=RAIN_PATH[Math.min(RAIN_N-1,Math.floor(rainbowProgress))];const next=RAIN_PATH[Math.min(RAIN_N-1,Math.floor(rainbowProgress)+1)];car.angle=Math.atan2(next[1]-target[1],next[0]-target[0]);car.speed=Math.min(4.2,car.speed+.12*dt);rainbowProgress+=car.speed*dt*.72;car.x=target[0];car.y=target[1];for(const g of ghostObstacles){g.position.y=36+Math.sin(performance.now()/300+g.userData.phase)*7;const dx=g.position.x-car.x,dz=g.position.z-car.y;if(Math.hypot(dx,dz)<32)car.speed=Math.max(1.1,car.speed-.7);g.rotation.y+=.02*dt;}if(rainbowProgress>=RAIN_N-1){car.lap=6;car.finished=true;sendMsg({type:'pos',x:car.x,y:car.y,angle:car.angle,lap:6,prog:RAIN_N-1,rainbow:true});}}
+function stepRainbow(dt){if(cardOpen||car.finished)return;const target=RAIN_PATH[Math.min(RAIN_N-1,Math.floor(rainbowProgress))];const next=RAIN_PATH[Math.min(RAIN_N-1,Math.floor(rainbowProgress)+1)];car.angle=Math.atan2(next[1]-target[1],next[0]-target[0]);car.speed=Math.min(4.2,car.speed+.12*dt);rainbowProgress+=car.speed*dt*.72;car.x=target[0];car.y=target[1];car.rainbowY=rainbowHeight(Math.floor(rainbowProgress));for(const g of ghostObstacles){g.position.y=rainbowHeight(Math.round((g.position.x+1250)/15))+34+Math.sin(performance.now()/300+g.userData.phase)*7;const dx=g.position.x-car.x,dz=g.position.z-car.y;if(Math.hypot(dx,dz)<32)car.speed=Math.max(1.1,car.speed-.7);g.rotation.y+=.02*dt;}if(rainbowProgress>=RAIN_N-1){car.lap=6;car.finished=true;sendMsg({type:'pos',x:car.x,y:car.y,angle:car.angle,lap:6,prog:RAIN_N-1,rainbow:true});}}
 
 // faixa (strip) genérica ao longo da pista: fa(i), fb(i) devolvem [x, y, z]; colorFn(i) devolve cor hex por segmento
 function strip(fa, fb, colorFn, material) {
@@ -561,8 +564,9 @@ function showResults(ranking) {
 const camTarget = new THREE.Vector3(), lookTarget = new THREE.Vector3();
 function camGoal() {
   const fx = Math.cos(car.angle), fz = Math.sin(car.angle);
-  camTarget.set(car.x - fx * 100, 54, car.y - fz * 100);
-  lookTarget.set(car.x + fx * 45, 10, car.y + fz * 45);
+  const elev=rainbowMode?(car.rainbowY||rainbowHeight(Math.floor(rainbowProgress))):0;
+  camTarget.set(car.x - fx * 100, 54+elev, car.y - fz * 100);
+  lookTarget.set(car.x + fx * 45, 10+elev, car.y + fz * 45);
 }
 const mini = $("#mini").getContext("2d");
 const MB = (() => { const xs = PATH.map(p => p[0]), ys = PATH.map(p => p[1]); const x0 = Math.min(...xs) - HALF, x1 = Math.max(...xs) + HALF, y0 = Math.min(...ys) - HALF, y1 = Math.max(...ys) + HALF;
@@ -640,6 +644,7 @@ function frame(now) {
       placeKart(o.mesh, o.x, o.y, o.angle, o.hitUntil > now ? (o.hitUntil - now) / 100 : 0); animateKart(o.mesh,o,now,dt);
     }
     placeKart(car.mesh, car.x, car.y, car.angle, car.hitUntil > now ? (car.hitUntil - now) / 100 : 0);
+    if(rainbowMode) car.mesh.position.y=car.rainbowY||rainbowHeight(Math.floor(rainbowProgress));
     animateKart(car.mesh,car,now,dt);
     car.mesh.position.y = Math.abs(car.speed) > 0.5 ? Math.sin(now / 40) * 0.3 : 0;
     for (let b = 0; b < boxMeshes.length; b++) { const m = boxMeshes[b]; m.rotation.y = now / 800; m.rotation.x = now / 1300; m.position.y = 14 + Math.sin(now / 300 + b) * 2; m.visible=boxes[b];m.userData.ring.visible=boxes[b];m.userData.ring.material.color.setHSL((now/5000+b/9)%1,.9,.7); }

@@ -53,9 +53,3 @@ Pista 30% mais longa e cerca de 23% mais larga. Limite lateral considera o kart 
 Seis carrocerias, seis rodas, quatro personagens e três aerofólios: 432 combinações, além da pintura livre. Os personagens são modelos cartunescos próprios. O esportivo italiano é uma interpretação estilizada, sem emblemas. O caminhão monstro tem chassi elevado; o Fórmula tem bico e asas próprios. As peças e personagens não mudam o desempenho.
 
 O disparo de raio mostra clarão na origem e um trajeto elétrico que avança até o alvo. Sem alvo, ainda aparece um disparo visual para a frente. A duração e as regras do poder continuam iguais. A pista ampliada e a correção das barreiras da versão 6.1 foram mantidas.
-
-
-## Transição da quarta volta
-Ao entrar na quarta volta, o servidor envia um aviso sincronizado para todos e pausa as cartas por 5,2 segundos. A interface mostra “Quarta volta” enquanto a pista original se desmonta. Em seguida, todos entram numa ponte arco-íris ondulada, com céu noturno, estrelas iluminadas e pequenos fantasmas que flutuam sobre a pista. O jogador passa deles desviando; tocar neles reduz apenas a velocidade momentaneamente.
-
-A partir da ponte, a regra de cartas volta ao intervalo normal. A ponte substitui a continuação da corrida e leva diretamente à linha de chegada.
