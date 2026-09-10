@@ -53,3 +53,7 @@ Pista 30% mais longa e cerca de 23% mais larga. Limite lateral considera o kart 
 Seis carrocerias, seis rodas, quatro personagens e três aerofólios: 432 combinações, além da pintura livre. Os personagens são modelos cartunescos próprios. O esportivo italiano é uma interpretação estilizada, sem emblemas. O caminhão monstro tem chassi elevado; o Fórmula tem bico e asas próprios. As peças e personagens não mudam o desempenho.
 
 O disparo de raio mostra clarão na origem e um trajeto elétrico que avança até o alvo. Sem alvo, ainda aparece um disparo visual para a frente. A duração e as regras do poder continuam iguais. A pista ampliada e a correção das barreiras da versão 6.1 foram mantidas.
+
+
+## Ajuste da ponte arco-íris
+A segunda pista agora tem exatamente a largura da pista normal (270 unidades), com sete faixas neon contínuas. As laterais são barreiras elevadas com brilho ciano suave. Ela continua em um mapa separado, com coordenadas e traçado próprios, céu estrelado e fantasmas.
