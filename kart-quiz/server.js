@@ -89,11 +89,17 @@ function beginRainbow(room) {
   room.transition = true;
   clearInterval(room.cardTimer); room.cardTimer = null;
   if (room.question) closeQuestion(room);
-  broadcast(room, { type: "rainbow_warning", text: "Quarta volta" });
+  const round=room.round;
+  broadcast(room, { type: "rainbow_warning", text: "Salto dimensional" });
   setTimeout(() => {
-    if (room.state !== "racing") return;
+    if (room.state !== "racing" || room.round!==round) return;
     room.rainbow = true; room.transition = false;
-    broadcast(room, { type: "rainbow_start" });
+    let slot=0;
+    for(const p of room.players.values()){
+      const i=24-Math.floor(slot/4)*3,t=i/320,x=t*6400,z=420*Math.sin(t*Math.PI*2)-180*Math.sin(t*Math.PI*4),h=Math.atan2(840*Math.PI*Math.cos(t*Math.PI*2)-720*Math.PI*Math.cos(t*Math.PI*4),6400),off=(slot%4-1.5)*55;
+      p.x=x-Math.sin(h)*off;p.y=-3200+z+Math.cos(h)*off;p.angle=h;p.lap=4;p.prog=i;p.rainbow=true;slot++;
+    }
+    broadcast(room, { type: "rainbow_start", players:playerList(room) });
     room.cardTimer = setInterval(() => { if (room.state === "racing" && room.rainbow && !room.question) openQuestion(room); }, QUESTION_INTERVAL);
   }, 5200);
 }
@@ -193,7 +199,7 @@ wss.on("connection", ws => {
     if (m.type === "start" && p.id === room.hostId && (room.state === "lobby" || room.state === "results")) return startRace(room);
 
     if (m.type === "pos") {
-      if(room.state!=="racing" || p.finished || ![m.x,m.y,m.angle,m.prog,m.lap].every(Number.isFinite) || !Number.isInteger(m.lap) || m.lap<1 || m.lap>LAPS+1) return;
+      if(room.state!=="racing" || room.transition || (room.rainbow && !m.rainbow) || p.finished || ![m.x,m.y,m.angle,m.prog,m.lap].every(Number.isFinite) || !Number.isInteger(m.lap) || m.lap<1 || m.lap>LAPS+1) return;
       p.x = m.x; p.y = m.y; p.angle = m.angle; p.prog = m.prog; p.boost = false; p.rainbow = !!m.rainbow;
       if (m.lap !== p.lap) { p.lap = m.lap; if (p.lap > LAPS) handleFinish(room, p); }
       if (!room.rainbow && p.lap >= 4) beginRainbow(room);
