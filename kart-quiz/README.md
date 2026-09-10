@@ -57,3 +57,11 @@ O disparo de raio mostra clarão na origem e um trajeto elétrico que avança at
 
 ## Correção da ponte arco-íris
 A ponte usa uma malha contínua tubular com 270 unidades de largura, eliminando lâminas triangulares esticadas. Sete linhas neon acompanham a superfície, as barreiras ficam nas bordas e a travessia é necessária antes da chegada.
+
+
+## Transição visual ajustada
+O aviso inicial diz apenas “Quarta volta”. Depois os jogadores ficam parados na pista original enquanto a ponte arco-íris sobe à frente por 4,2 segundos. O acesso direito fica fechado com um portão luminoso e uma placa indica a subida pela esquerda. Ao final da animação, os karts entram na ponte com suas barreiras e o novo mapa estrelado.
+
+
+## Ajuste após teste de vídeo
+O mapa arco-íris agora é ancorado dinamicamente na frente do kart que chega à quarta volta. Isso evita que a ponte apareça atrás ou fora da câmera. Durante o aviso, o jogador continua na pista original; a ponte é criada à frente e sobe do subsolo. Depois da subida, o kart entra no primeiro ponto da ponte, sem concluir a corrida fora dela.
