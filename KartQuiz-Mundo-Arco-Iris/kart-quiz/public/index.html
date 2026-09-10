@@ -205,7 +205,7 @@ ws.onmessage = ev => {
     case "finished": if (m.id === me.id) { car.finished = true; car.rank = m.rank; } break;
     case "results": showResults(m.ranking); break;
     case "rainbow_warning": showRainbowWarning(m.text); break;
-    case "rainbow_start": enterRainbowTrack(); break;
+    case "rainbow_start": enterRainbowTrack(m.players); break;
   }
 };
 
@@ -293,6 +293,7 @@ Object.assign(sun.shadow.camera, { left: -1800, right: 1800, top: 1800, bottom: 
 sun.shadow.camera.updateProjectionMatrix();
 scene.add(sun);
 
+const originalWorld = new THREE.Group(); scene.add(originalWorld);
 // chão
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), new THREE.MeshLambertMaterial({ color: 0x4c9a52 }));
 ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
@@ -323,6 +324,19 @@ function makeRainbowTrack(){
   const neon=new THREE.MeshBasicMaterial({color:0x9af7ff,side:THREE.DoubleSide});
   const glass=new THREE.MeshPhongMaterial({color:0x65cfff,transparent:true,opacity:.32,side:THREE.DoubleSide});
   colors.forEach((color,j)=>ribbon(-135+j*270/7,-135+(j+1)*270/7,0,0,new THREE.MeshPhongMaterial({color,emissive:color,emissiveIntensity:.28,shininess:90,side:THREE.DoubleSide})));
+  const tiles=new THREE.InstancedMesh(new THREE.BoxGeometry(18,1,17.6),new THREE.MeshPhongMaterial({color:0xffffff,emissive:0x26263d,shininess:100}),RAIN_N*14);
+  const dummy=new THREE.Object3D();let tile=0;
+  for(let i=0;i<RAIN_N;i++)for(let j=0;j<14;j++){
+    dummy.position.copy(rainPoint(i,-125.35+j*19.285,1));
+    const a=RAIN_PATH[Math.max(0,i-1)],b=RAIN_PATH[Math.min(RAIN_N-1,i+1)];dummy.rotation.set(0,-Math.atan2(b[1]-a[1],b[0]-a[0]),0);dummy.updateMatrix();tiles.setMatrixAt(tile,dummy.matrix);tiles.setColorAt(tile,new THREE.Color(colors[Math.floor(j/2)]).multiplyScalar((i+j)%3===0?1:.8));tile++;
+  }rainbowGroup.add(tiles);
+  const crystalGeo=new THREE.OctahedronGeometry(1,0);
+  for(let i=12;i<RAIN_N;i+=12)for(const side of [-1,1]){
+    const crystal=new THREE.Mesh(crystalGeo,new THREE.MeshPhongMaterial({color:colors[i%7],emissive:colors[i%7],emissiveIntensity:.4,shininess:100,transparent:true,opacity:.85}));crystal.position.copy(rainPoint(i,side*200,-12));crystal.scale.set(22,50+(i%4)*12,22);crystal.rotation.z=side*.35;rainbowGroup.add(crystal);
+  }
+  for(const i of [12,110,220,310]){
+    const arch=new THREE.Mesh(new THREE.TorusGeometry(205,5,8,72,Math.PI),neon);arch.position.copy(rainPoint(i,0,0));const a=RAIN_PATH[i-1],b=RAIN_PATH[i+1];arch.rotation.y=Math.atan2(b[0]-a[0],b[1]-a[1]);rainbowGroup.add(arch);
+  }
   ribbon(-135,135,-15,-15,steel);
   function beam(a,b,width,material){const d=b.clone().sub(a),m=new THREE.Mesh(new THREE.BoxGeometry(width,d.length(),width),material);m.position.copy(a).add(b).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());rainbowGroup.add(m);}
   for(const side of [-1,1]){
@@ -348,9 +362,21 @@ function makeRainbowTrack(){
   for(let i=0;i<10;i++){const g=new THREE.Group(),idx=35+i*26;g.add(new THREE.Mesh(new THREE.SphereGeometry(12,12,8),ghostMat));for(const x of [-5,5]){const eye=new THREE.Mesh(new THREE.SphereGeometry(2.5,8,6),new THREE.MeshBasicMaterial({color:0x17213c}));eye.position.set(x,4,10);g.add(eye);}g.position.copy(rainPoint(idx,(i%3-1)*65,34));g.userData={phase:i*.8,trackIndex:idx};rainbowGroup.add(g);ghostObstacles.push(g);}
   scene.background=new THREE.Color(0x070b25);scene.fog=new THREE.Fog(0x070b25,1800,6500);
 }
-function showRainbowWarning(title){cardOpen=true;const e=$("#trackEvent");e.classList.remove('hidden');$('#trackEventTitle').firstChild.textContent=title;$('#trackEventSub').textContent='A pista está se desmontando...';setTimeout(()=>{if(e)e.classList.add('hidden');},4800);}
-function enterRainbowTrack(){makeRainbowTrack();rainbowMode=false;rainbowRising=true;rainbowRiseStart=performance.now();rainbowGroup.position.y=-420;rainbowProgress=0;cardOpen=true;const e=$("#trackEvent");e.classList.remove('hidden');$('#trackEventTitle').firstChild.textContent='A ponte está subindo';$('#trackEventSub').textContent='Estrada Celeste — curvas estelares e pontes suspensas';car.speed=0;setTimeout(()=>e.classList.add('hidden'),4700);}
-function finishRainbowRise(){rainbowMode=true;rainbowRising=false;rainbowGroup.position.y=0;rainbowProgress=0;cardOpen=false;car.x=RAIN_PATH[0][0]+rainbowOx;car.y=RAIN_PATH[0][1]+rainbowOz;car.angle=Math.atan2(RAIN_PATH[1][1]-RAIN_PATH[0][1],RAIN_PATH[1][0]-RAIN_PATH[0][0]);car.speed=0;car.idx=0;car.rainbowY=rainbowHeight(0);flash('Ponte arco-íris!');}
+function showRainbowWarning(title){cardOpen=true;const e=$("#trackEvent");e.classList.remove('hidden');$('#trackEventTitle').firstChild.textContent=title;$('#trackEventSub').textContent='Portal aberto — todos serão teleportados para a Estrada Celeste';setTimeout(()=>{if(e)e.classList.add('hidden');},4800);}
+function enterRainbowTrack(players){
+  clearEffects();makeRainbowTrack();originalWorld.visible=false;
+  rainbowMode=true;rainbowRising=false;rainbowProgress=0;cardOpen=false;
+  const roster=players||[];
+  for(const p of roster){
+    if(p.id===me.id){car.x=p.x;car.y=p.y;car.angle=p.angle;car.lap=4;}
+    else {const o=others.get(p.id);if(o){o.x=o.tx=p.x;o.y=o.ty=p.y;o.angle=o.tangle=p.angle;o.lap=4;o.prog=0;o.rainbow=true;}}
+  }
+  if(!roster.length){car.x=RAIN_PATH[0][0]+rainbowOx;car.y=RAIN_PATH[0][1]+rainbowOz;car.angle=0;car.lap=4;}
+  car.speed=0;car.idx=0;car.stun=0;car.hitUntil=0;
+  const near=nearestRainbowPoint(car.x,car.y);car.rainbowY=rainbowHeight(near.idx+near.t);
+  camGoal();camera.position.copy(camTarget);camera.lookAt(lookTarget);
+  $('#trackEvent').classList.add('hidden');flash('ESTRADA CELESTE — outro mundo!');
+}
 function nearestRainbowPoint(wx,wz){let best={dist:Infinity,idx:0,x:0,z:0};for(let i=0;i<RAIN_N-1;i++){const a=RAIN_PATH[i],b=RAIN_PATH[i+1],ax=a[0]+rainbowOx,az=a[1]+rainbowOz,bx=b[0]+rainbowOx,bz=b[1]+rainbowOz,dx=bx-ax,dz=bz-az,len=dx*dx+dz*dz,t=Math.max(0,Math.min(1,((wx-ax)*dx+(wz-az)*dz)/len)),px=ax+dx*t,pz=az+dz*t,d=Math.hypot(wx-px,wz-pz);if(d<best.dist)best={dist:d,idx:i,t,x:px,z:pz};}return best;}
 function stepRainbow(dt){
   if(cardOpen||car.finished){car.speed*=.9;return;}
@@ -432,6 +458,8 @@ function makeLabel(text) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
   s.scale.set(48, 12, 1); s.position.y = 26; return s;
 }
+// Static scenery belongs exclusively to the original world.
+for(const child of [...scene.children])if(child!==originalWorld&&!child.isLight)originalWorld.add(child);
 function makeKart(color,name,style) {const g=buildKart({...style,color});const label=makeLabel(name);label.position.y=style?.body==='monster'?57:49;g.add(label);scene.add(g);return g;}
 const placeKart = (g, x, z, a, spin = 0) => { g.position.set(x, 0, z); g.rotation.y = -a + spin; };
 
@@ -462,7 +490,7 @@ function spawn(slot) {
 }
 
 function beginRace(players) {
-  rainbowMode=false;rainbowRising=false;rainbowProgress=0;ghostObstacles=[];if(rainbowGroup){scene.remove(rainbowGroup);rainbowGroup=null;}scene.background=new THREE.Color(0x9fd3f0);scene.fog=new THREE.Fog(0x9fd3f0,900,2600);
+  originalWorld.visible=true;rainbowMode=false;rainbowRising=false;rainbowProgress=0;ghostObstacles=[];if(rainbowGroup){rainbowGroup.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(m.map)m.map.dispose();m.dispose();}}});scene.remove(rainbowGroup);rainbowGroup=null;}scene.background=new THREE.Color(0x9fd3f0);scene.fog=new THREE.Fog(0x9fd3f0,900,2600);
   for (const o of others.values()) {scene.remove(o.mesh);disposeKart(o.mesh);} others.clear();
   if (car.mesh) {scene.remove(car.mesh);disposeKart(car.mesh);}
   car.mesh = makeKart(me.color, "você", me.style);
@@ -478,6 +506,8 @@ function beginRace(players) {
 }
 
 function pushBack() {
+  if(rainbowMode){const n=nearestRainbowPoint(car.x,car.y),i=Math.max(0,n.idx-6);car.x=RAIN_PATH[i][0]+rainbowOx;car.y=RAIN_PATH[i][1]+rainbowOz;car.rainbowY=rainbowHeight(i);car.angle=Math.atan2(RAIN_PATH[i+1][1]-RAIN_PATH[i][1],RAIN_PATH[i+1][0]-RAIN_PATH[i][0]);car.speed=0;car.stun=performance.now()+600;return;}
+
   const i = (car.idx - 6 + N) % N;
   car.x = PATH[i][0]; car.y = PATH[i][1]; car.angle = headingAt(i); car.speed = 0; car.idx = i; car.stun = performance.now() + 600;
 }
@@ -620,6 +650,11 @@ const MB = (() => { const xs = PATH.map(p => p[0]), ys = PATH.map(p => p[1]); co
   const sc = Math.min(176 / (x1 - x0), 104 / (y1 - y0)); return { sc, ox: 96 - (x0 + x1) / 2 * sc, oy: 60 - (y0 + y1) / 2 * sc }; })();
 function drawMini() {
   mini.clearRect(0, 0, 192, 120);
+  if(rainbowMode){
+    const project=(x,z)=>[10+(x-rainbowOx)/6400*172,60+(z-rainbowOz)/1600*90];
+    mini.lineWidth=7;mini.strokeStyle='#b58aff';mini.beginPath();RAIN_PATH.forEach(([x,z],i)=>{const p=project(x+rainbowOx,z+rainbowOz);if(i)mini.lineTo(...p);else mini.moveTo(...p);});mini.stroke();
+    for(const p of [...others.values(),car]){const q=project(p.x,p.y);mini.fillStyle=p===car?'#ffffff':p.color;mini.beginPath();mini.arc(...q,p===car?4:3,0,Math.PI*2);mini.fill();}return;
+  }
   mini.save(); mini.translate(MB.ox, MB.oy); mini.scale(MB.sc, MB.sc);
   mini.lineJoin = "round"; mini.lineCap = "round";
   mini.beginPath(); mini.moveTo(PATH[0][0], PATH[0][1]); for (const [x, y] of PATH) mini.lineTo(x, y); mini.closePath();
@@ -633,7 +668,7 @@ function drawMini() {
 function hud(now) {
   const pos = myPosition(), tot = others.size + 1;
   $("#hudPos").textContent = pos + "º"; $("#hudTot").textContent = "de " + tot;
-  $("#hudLap").textContent = car.finished ? "Chegou!" : `Volta ${Math.min(car.lap, LAPS)}/${LAPS}`;
+  $("#hudLap").textContent = car.finished ? "Chegou!" : rainbowMode ? "Estrada Celeste · Final" : `Volta ${Math.min(car.lap, LAPS)}/${LAPS}`;
   const b = $("#badge");
   if (now < flashUntil) { b.innerHTML = flashText; b.className = "bad"; }
   else if (now < car.hitUntil) { b.textContent = "derrubado!"; b.className = "bad"; }
@@ -684,7 +719,7 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(2.5, (now - last) / 16.67); last = now;
   if (phase !== "lobby" && car.mesh) {
-    if(rainbowRising && rainbowGroup){const t=Math.min(1,(now-rainbowRiseStart)/4200);const ease=t*t*(3-2*t);rainbowGroup.position.y=-420+420*ease;if(t>=1)finishRainbowRise();}
+    
     step(dt); net(now);
     for (const o of others.values()) {
       o.x += (o.tx - o.x) * 0.35; o.y += (o.ty - o.y) * 0.35;
