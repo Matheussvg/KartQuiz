@@ -69,3 +69,7 @@ O mapa arco-íris agora é ancorado dinamicamente na frente do kart que chega à
 
 ## Ponte arco-íris jogável
 A ponte deixou de conduzir o kart automaticamente. O jogador controla aceleração, ré e direção com WASD ou setas, enquanto a câmera acompanha o traçado. O limite das barreiras usa a mesma largura útil da pista normal; o contato com fantasmas reduz a velocidade por um instante. A chegada só é enviada no último segmento.
+
+
+## Mapa novo arco-íris
+A fase final agora é uma pista plana independente, com 270 unidades de largura, exatamente igual à pista original. O estilo muda apenas na apresentação: sete faixas neon, barreiras ciano suaves, céu estrelado e fantasmas. A malha acompanha a curva com normais próprias, sem triângulos esticados. O controle continua manual com WASD/setas.
