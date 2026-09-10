@@ -55,5 +55,5 @@ Seis carrocerias, seis rodas, quatro personagens e três aerofólios: 432 combin
 O disparo de raio mostra clarão na origem e um trajeto elétrico que avança até o alvo. Sem alvo, ainda aparece um disparo visual para a frente. A duração e as regras do poder continuam iguais. A pista ampliada e a correção das barreiras da versão 6.1 foram mantidas.
 
 
-## Ajuste da ponte arco-íris
-A segunda pista agora tem exatamente a largura da pista normal (270 unidades), com sete faixas neon contínuas. As laterais são barreiras elevadas com brilho ciano suave. Ela continua em um mapa separado, com coordenadas e traçado próprios, céu estrelado e fantasmas.
+## Correção da ponte arco-íris
+A ponte usa uma malha contínua tubular com 270 unidades de largura, eliminando lâminas triangulares esticadas. Sete linhas neon acompanham a superfície, as barreiras ficam nas bordas e a travessia é necessária antes da chegada.
