@@ -223,9 +223,9 @@ function showLobby() { phase = "lobby"; $("#race").classList.add("hidden"); $("#
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 // ---------- Pista (mesma geometria da versão 2D: x = X do mundo, y = Z do mundo) ----------
-const SCALE = 2.4;   // tamanho da pista (a forma vem dos pontos abaixo)
+const SCALE = 3.12;   // tamanho da pista (a forma vem dos pontos abaixo)
 const CTRL = [[150,300],[200,150],[400,110],[560,175],[700,110],[830,200],[820,380],[680,490],[480,455],[300,500],[160,430]].map(([x, y]) => [x * SCALE, y * SCALE]);
-const HALF = 110;    // metade da largura da pista
+const HALF = 135;    // metade da largura da pista
 const PATH = [];
 (function build() {
   const n = CTRL.length, per = 12;
@@ -254,6 +254,18 @@ function nearestIdx(x, y, hint) {
   return { idx: best, dist: Math.sqrt(bd) };
 }
 
+// Projeção nos segmentos evita saltos de limite entre amostras da curva.
+function nearestTrackPoint(x,y) {
+  let best={dist:Infinity};
+  for(let i=0;i<N;i++) {
+    const a=PATH[i],b=PATH[(i+1)%N],dx=b[0]-a[0],dy=b[1]-a[1];
+    const t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/(dx*dx+dy*dy)));
+    const px=a[0]+dx*t,py=a[1]+dy*t,dist=Math.hypot(x-px,y-py);
+    if(dist<best.dist)best={x:px,y:py,dist,idx:i};
+  }
+  return best;
+}
+
 // ---------- Cena 3D ----------
 const glCanvas = $("#gl");
 const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
@@ -267,9 +279,9 @@ const camera = new THREE.PerspectiveCamera(60, 16/10, 1, 3000);
 
 scene.add(new THREE.HemisphereLight(0xdff3ff, 0x3c7a3c, 0.85));
 const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-sun.position.set(600, 900, 400); sun.castShadow = true;
+sun.position.set(1200, 1400, 700); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -1200, right: 1200, top: 1200, bottom: -1200, near: 10, far: 2500 });
+Object.assign(sun.shadow.camera, { left: -1800, right: 1800, top: 1800, bottom: -1800, near: 10, far: 4000 });
 sun.shadow.camera.updateProjectionMatrix();
 scene.add(sun);
 
@@ -324,7 +336,7 @@ for (const s of [1, -1]) {
   const tm = new THREE.MeshLambertMaterial({ color: 0x7a4b2a }), lm = new THREE.MeshLambertMaterial({ color: 0x2f7a3a });
   let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
   for (let k = 0; k < 160; k++) {
-    const x = -300 + rnd() * 2600, z = -300 + rnd() * 1900;
+    const x = -300 + rnd() * 3300, z = -300 + rnd() * 2400;
     if (nearestIdx(x, z).dist < WALL + 30) continue;
     const t = new THREE.Mesh(trunk, tm); t.position.set(x, 7, z); t.castShadow = true;
     const l = new THREE.Mesh(leaf, lm); l.position.set(x, 28, z); l.castShadow = true; l.scale.setScalar(0.8 + rnd()*0.6);
@@ -413,14 +425,14 @@ function step(dt) {
 
   // Limite suave da pista: não reduz velocidade nem gera efeito de batida.
   const n2 = nearestIdx(car.x, car.y, car.idx);
-  const [nx, ny] = normalAt(n2.idx);
-  const lat = (car.x - PATH[n2.idx][0]) * nx + (car.y - PATH[n2.idx][1]) * ny;
-  const LIM = HALF + 1;
-  if (Math.abs(lat) > LIM) {
-    const over = Math.abs(lat) - LIM, s = Math.sign(lat);
-    car.x -= nx * over * s; car.y -= ny * over * s;
-    // vira o nariz de volta para a direção da pista
-    const h = headingAt(n2.idx); let d = h - car.angle; d = Math.atan2(Math.sin(d), Math.cos(d)); car.angle += d * 0.25;
+  const edge = nearestTrackPoint(car.x, car.y);
+  // Reserva espaço para o kart inteiro, inclusive rodas largas e aerofólio.
+  const LIM = HALF - 34;
+  if (edge.dist > LIM) {
+    const nx=(car.x-edge.x)/edge.dist, ny=(car.y-edge.y)/edge.dist;
+    car.x=edge.x+nx*LIM; car.y=edge.y+ny*LIM;
+    const h=headingAt(edge.idx);const d=Math.atan2(Math.sin(h-car.angle),Math.cos(h-car.angle));
+    car.angle+=d*(1-Math.pow(.75,dt));
   }
 
   const fwd = ((n2.idx - car.idx) + N) % N;

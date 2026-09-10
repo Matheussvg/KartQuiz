@@ -45,3 +45,6 @@ Para testar no computador, abra esta pasta no terminal e execute `npm ci` e `npm
 Testes passaram para as 27 combinações de peças, os quatro efeitos visuais e sua limpeza, bloqueio do escudo, alcance da onda, gelo, raio, sincronização da personalização, coleta aleatória, reinício e regras originais do quiz. Integração verificada com dois clientes WebSocket locais. Garagem e corrida inspecionadas no navegador.
 
 Ainda não houve teste de carga com 30 jogadores nem teste em celular físico. O servidor continua recebendo posições calculadas pelo cliente, como na versão original. Esta entrega não publica automaticamente no Render.
+
+## Ajuste 6.1
+Pista 30% mais longa e cerca de 23% mais larga. Limite lateral considera o kart inteiro e usa projeção no segmento da pista, sem redução de velocidade. Demais regras, garagem e poderes preservados.
