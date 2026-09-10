@@ -1,4 +1,4 @@
-# Kart Quiz — garagem e poderes (v6)
+# Kart Quiz — garagem e poderes (v7)
 
 Base: versão 4 enviada pelo usuário. A pista, as perguntas, a direção e as regras do quiz foram preservadas.
 
@@ -10,7 +10,7 @@ Base: versão 4 enviada pelo usuário. A pista, as perguntas, a direção e as r
 - Encostar na barreira não reduz a velocidade nem produz efeitos de batida. O limite mantém o kart dentro da pista e alinha suavemente a direção.
 
 ## Garagem
-Clique em Personalizar meu kart no menu ou na sala de espera. Escolha pintura, carroceria (esportivo, buggy ou clássico), rodas (pista, largas ou todo-terreno) e aerofólio (nenhum, esportivo ou duplo). Salve para aplicar.
+Clique em Personalizar meu kart no menu ou na sala de espera. Escolha pintura, personagem (piloto original, macaco, tartaruga ou coelho), carroceria (esportivo, buggy, clássico, supercarro italiano inspirado em Ferrari, caminhão monstro ou Fórmula), rodas (pista, largas, todo-terreno, Monster, neon ou retrô) e aerofólio (nenhum, esportivo ou duplo). Salve para aplicar.
 
 A prévia é 3D, as escolhas ficam salvas neste navegador quando o armazenamento está disponível e os outros participantes veem o mesmo kart. Todas as peças são cosméticas, sem diferenças de desempenho. As alterações são permitidas antes da largada.
 
@@ -19,7 +19,7 @@ As caixas flutuam e giram, com seis faces coloridas em gradiente prismático. Ca
 
 | Poder | Efeito | Visual |
 |---|---|---|
-| Raio | Derruba por 1,3s o piloto imediatamente à frente na classificação | Raio vertical e faíscas |
+| Raio | Derruba por 1,3s o piloto imediatamente à frente na classificação | Clarão no kart que dispara, raio em movimento até o alvo, descarga vertical e faíscas |
 | Escudo | Bloqueia um ataque durante até 8s; desaparece ao bloquear | Bolha azul translúcida e partículas |
 | Gelo | Reduz por 3s a velocidade máxima do piloto imediatamente à frente | Projétil azul e cristais ao redor do kart |
 | Onda de choque | Faz girar por 0,8s os adversários num raio de 180 unidades | Anel rosa que se expande |
@@ -42,9 +42,14 @@ Se você havia alterado Root Directory para kart-quiz-v5, volte para kart-quiz. 
 Para testar no computador, abra esta pasta no terminal e execute `npm ci` e `npm start`. Acesse http://localhost:3000. A biblioteca Three.js acompanha o projeto com sua licença.
 
 ## Verificações
-Testes passaram para as 27 combinações de peças, os quatro efeitos visuais e sua limpeza, bloqueio do escudo, alcance da onda, gelo, raio, sincronização da personalização, coleta aleatória, reinício e regras originais do quiz. Integração verificada com dois clientes WebSocket locais. Garagem e corrida inspecionadas no navegador.
+Testes passaram para as 432 combinações de personagem e peças, os quatro efeitos visuais e sua limpeza, bloqueio do escudo, alcance da onda, gelo, raio, sincronização da personalização, coleta aleatória, reinício e regras originais do quiz. Integração verificada com dois clientes WebSocket locais. Garagem e corrida inspecionadas no navegador.
 
 Ainda não houve teste de carga com 30 jogadores nem teste em celular físico. O servidor continua recebendo posições calculadas pelo cliente, como na versão original. Esta entrega não publica automaticamente no Render.
 
 ## Ajuste 6.1
 Pista 30% mais longa e cerca de 23% mais larga. Limite lateral considera o kart inteiro e usa projeção no segmento da pista, sem redução de velocidade. Demais regras, garagem e poderes preservados.
+
+## Garagem ampliada — v7
+Seis carrocerias, seis rodas, quatro personagens e três aerofólios: 432 combinações, além da pintura livre. Os personagens são modelos cartunescos próprios. O esportivo italiano é uma interpretação estilizada, sem emblemas. O caminhão monstro tem chassi elevado; o Fórmula tem bico e asas próprios. As peças e personagens não mudam o desempenho.
+
+O disparo de raio mostra clarão na origem e um trajeto elétrico que avança até o alvo. Sem alvo, ainda aparece um disparo visual para a frente. A duração e as regras do poder continuam iguais. A pista ampliada e a correção das barreiras da versão 6.1 foram mantidas.

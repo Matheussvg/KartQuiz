@@ -155,7 +155,7 @@ button:hover{filter:brightness(1.12);}input,select{min-width:0;}
 <section id="garage" class="hidden" role="dialog" aria-modal="true" aria-label="Garagem">
 <div class="garageShell"><div class="garageTop"><div><p class="eyebrow">SEU KART / SEU ESTILO</p><h2>Garagem de pilotos</h2></div><button class="ghost" id="garageClose">Voltar</button></div>
 <div class="garageGrid"><div class="preview"><canvas id="garageCanvas" aria-label="Prévia 3D do kart"></canvas><small>Prévia 3D · o mesmo kart que você verá na corrida</small></div>
-<div class="garageForm"><label>Pintura<input type="color" id="kartColor" value="#ff4d64"></label><label>Carroceria<select id="kartBody"><option value="sport">Esportivo</option><option value="buggy">Buggy</option><option value="classic">Clássico</option></select></label><label>Rodas<select id="kartWheels"><option value="standard">Pista</option><option value="wide">Largas</option><option value="offroad">Todo-terreno</option></select></label><label>Aerofólio<select id="kartWing"><option value="none">Sem aerofólio</option><option value="sport" selected>Esportivo</option><option value="double">Duplo</option></select></label><p>As peças mudam o visual. Todos os karts têm a mesma velocidade e dirigibilidade.</p><button class="primary" id="garageSave">Salvar meu kart</button><div id="garageSaved" role="status"></div></div></div></div></section>
+<div class="garageForm"><label>Personagem<select id="kartCharacter"><option value="driver">Piloto original</option><option value="monkey">Macaco</option><option value="turtle">Tartaruga</option><option value="rabbit">Coelho</option></select></label><label>Pintura<input type="color" id="kartColor" value="#ff4d64"></label><label>Carroceria<select id="kartBody"><option value="sport">Esportivo</option><option value="buggy">Buggy</option><option value="classic">Clássico</option><option value="italian">Supercarro italiano · estilo Ferrari</option><option value="monster">Caminhão monstro</option><option value="formula">Fórmula</option></select></label><label>Rodas<select id="kartWheels"><option value="standard">Pista</option><option value="wide">Largas</option><option value="offroad">Todo-terreno</option><option value="monster">Monster</option><option value="neon">Neon</option><option value="retro">Retrô · faixa branca</option></select></label><label>Aerofólio<select id="kartWing"><option value="none">Sem aerofólio</option><option value="sport" selected>Esportivo</option><option value="double">Duplo</option></select></label><p>As peças mudam o visual. Todos os karts têm a mesma velocidade e dirigibilidade.</p><button class="primary" id="garageSave">Salvar meu kart</button><div id="garageSaved" role="status"></div></div></div></div></section>
 <script src="kart.js"></script><script src="garage.js"></script>
 <script>
 // ---------- Rede ----------
@@ -357,7 +357,7 @@ function makeLabel(text) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
   s.scale.set(48, 12, 1); s.position.y = 26; return s;
 }
-function makeKart(color,name,style) {const g=buildKart({...style,color});const label=makeLabel(name);label.position.y=38;g.add(label);scene.add(g);return g;}
+function makeKart(color,name,style) {const g=buildKart({...style,color});const label=makeLabel(name);label.position.y=style?.body==='monster'?57:49;g.add(label);scene.add(g);return g;}
 const placeKart = (g, x, z, a, spin = 0) => { g.position.set(x, 0, z); g.rotation.y = -a + spin; };
 
 // ---------- Meu kart ----------
@@ -581,6 +581,14 @@ function clearEffects(){for(const e of effects){scene.remove(e.mesh);e.mesh.geom
 function powerEffect(m){
  const player=m.id===me.id?car:others.get(m.id);
  if(m.power==='shield'){if(player)player.shieldUntil=m.until;burst(m.x,m.y,0x66eeff);return;}
+ if(m.power==='lightning'){
+ const origin=player?.mesh?.position; const sx=origin?origin.x:m.x,sz=origin?origin.z:m.y;
+ const a=player?.angle||0,tx=m.targets?.[0]?.x??sx+Math.cos(a)*160,tz=m.targets?.[0]?.y??sz+Math.sin(a)*160;
+ const points=[];for(let i=0;i<=24;i++){const t=i/24,zig=i===0||i===24?0:(i%2?7:-7);points.push(new THREE.Vector3(sx+(tx-sx)*t+Math.sin(a)*zig,22+Math.sin(t*Math.PI)*18+zig*.6,sz+(tz-sz)*t-Math.cos(a)*zig));}
+ const geometry=new THREE.BufferGeometry().setFromPoints(points);geometry.setDrawRange(0,2);
+ const bolt=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0xc9f4ff,transparent:true}));addEffect(bolt,42,'launch');
+ const muzzle=new THREE.Mesh(new THREE.SphereGeometry(5,12,8),new THREE.MeshBasicMaterial({color:0xb3ddff,transparent:true}));muzzle.position.set(sx,22,sz);addEffect(muzzle,18,'muzzle');burst(sx,sz,0x9edcff);
+ }
  if(m.power==='pulse'){const ring=new THREE.Mesh(new THREE.TorusGeometry(1,.06,6,64),new THREE.MeshBasicMaterial({color:0xff83e8,transparent:true,depthWrite:false}));ring.rotation.x=Math.PI/2;ring.position.set(m.x,6,m.y);addEffect(ring,38,'pulse');burst(m.x,m.y,0xff83e8);}
  for(const t of m.targets||[]){
   if(m.power==='lightning'){
@@ -591,7 +599,7 @@ function powerEffect(m){
   }
  }
 }
-function updateEffects(dt){for(let i=effects.length-1;i>=0;i--){const e=effects[i];e.life-=dt;const f=Math.max(0,e.life/e.total);e.mesh.material.opacity=f;if(e.kind==='pulse')e.mesh.scale.setScalar(1+(1-f)*180);if(e.kind==='spark'){e.mesh.position.x+=e.v.x*dt;e.mesh.position.z+=e.v.z*dt;e.mesh.position.y+=.35*dt;e.mesh.rotation.x+=.1*dt;}if(e.kind==='orb'){e.mesh.position.x=e.v.sx+(e.v.tx-e.v.sx)*(1-f);e.mesh.position.z=e.v.sz+(e.v.tz-e.v.sz)*(1-f);e.mesh.rotation.y+=dt*.2;}if(e.life<=0){scene.remove(e.mesh);e.mesh.geometry.dispose();e.mesh.material.dispose();effects.splice(i,1);}}}
+function updateEffects(dt){for(let i=effects.length-1;i>=0;i--){const e=effects[i];e.life-=dt;const f=Math.max(0,e.life/e.total);e.mesh.material.opacity=f;if(e.kind==='launch')e.mesh.geometry.setDrawRange(0,Math.min(25,2+Math.floor((1-f)*65)));if(e.kind==='muzzle')e.mesh.scale.setScalar(1+(1-f)*2);if(e.kind==='pulse')e.mesh.scale.setScalar(1+(1-f)*180);if(e.kind==='spark'){e.mesh.position.x+=e.v.x*dt;e.mesh.position.z+=e.v.z*dt;e.mesh.position.y+=.35*dt;e.mesh.rotation.x+=.1*dt;}if(e.kind==='orb'){e.mesh.position.x=e.v.sx+(e.v.tx-e.v.sx)*(1-f);e.mesh.position.z=e.v.sz+(e.v.tz-e.v.sz)*(1-f);e.mesh.rotation.y+=dt*.2;}if(e.life<=0){scene.remove(e.mesh);e.mesh.geometry.dispose();e.mesh.material.dispose();effects.splice(i,1);}}}
 function animateKart(mesh,p,now,dt){mesh.userData.shield.visible=Date.now()<p.shieldUntil;mesh.userData.shield.scale.setScalar(1+Math.sin(now/180)*.025);mesh.userData.ice.visible=Date.now()<p.iceUntil;mesh.userData.ice.rotation.y=now/700;if(phase==='racing'&&!cardOpen&&!p.finished){const speed=p===car?car.speed:Math.hypot(p.tx-p.x,p.ty-p.y);for(const w of mesh.userData.wheels)w.rotation.z-=speed*dt*.09;}}
 
 let last = performance.now();
