@@ -41,7 +41,7 @@ function broadcast(room, msg) { for (const p of room.players.values()) send(p.ws
 function playerList(room) {
   return [...room.players.values()].map(p => ({
     id: p.id, name: p.name, color: p.color, style: p.style, shieldUntil: p.shieldUntil, iceUntil: p.iceUntil, host: p.id === room.hostId,
-    x: p.x, y: p.y, angle: p.angle, lap: p.lap, prog: p.prog, finished: p.finished, rank: p.rank, boost: p.boost, item: p.item,
+    x: p.x, y: p.y, angle: p.angle, lap: p.lap, prog: p.prog, finished: p.finished, rank: p.rank, boost: p.boost, item: p.item, rainbow: !!p.rainbow,
   }));
 }
 
@@ -50,6 +50,7 @@ function createRoom(ws, name, style) {
     code: code4(), hostId: null, players: new Map(), state: "lobby",
     boxes: Array.from({ length: N_BOXES }, () => ({ available: true })),
     question: null, usedQuestions: [], finishOrder: [], endTimer: null, cardTimer: null,
+    rainbow: false, transition: false,
   };
   rooms.set(room.code, room);
   joinRoom(ws, room, name, true, style);
@@ -69,10 +70,10 @@ function joinRoom(ws, room, name, isHost, style) {
 
 function startRace(room) {
   clearTimeout(room.endTimer); room.endTimer=null; if(room.question) {clearTimeout(room.question.timer);room.question=null;}
-  room.round=(room.round||0)+1;
+  room.round=(room.round||0)+1; room.rainbow=false; room.transition=false;
   room.state = "countdown";
   room.finishOrder = [];
-  for (const p of room.players.values()) { p.lap = 1; p.prog = 0; p.finished = false; p.rank = 0; p.boost = false; p.item = false; p.shieldUntil = 0; p.iceUntil = 0; }
+  for (const p of room.players.values()) { p.lap = 1; p.prog = 0; p.finished = false; p.rank = 0; p.boost = false; p.item = false; p.shieldUntil = 0; p.iceUntil = 0; p.rainbow = false; }
   clearInterval(room.cardTimer); room.cardTimer = null;
   for (const b of room.boxes) b.available = true;
   broadcast(room, { type: "countdown", players: playerList(room) });
@@ -81,6 +82,20 @@ function startRace(room) {
     room.state = "racing"; broadcast(room, { type: "go" });
     room.cardTimer = setInterval(() => { if (room.state === "racing" && !room.question) openQuestion(room); }, QUESTION_INTERVAL);
   }, 3500);
+}
+
+function beginRainbow(room) {
+  if (room.rainbow || room.transition) return;
+  room.transition = true;
+  clearInterval(room.cardTimer); room.cardTimer = null;
+  if (room.question) closeQuestion(room);
+  broadcast(room, { type: "rainbow_warning", text: "Quarta volta" });
+  setTimeout(() => {
+    if (room.state !== "racing") return;
+    room.rainbow = true; room.transition = false;
+    broadcast(room, { type: "rainbow_start" });
+    room.cardTimer = setInterval(() => { if (room.state === "racing" && room.rainbow && !room.question) openQuestion(room); }, QUESTION_INTERVAL);
+  }, 5200);
 }
 
 function pickQuestion(room) {
@@ -179,7 +194,8 @@ wss.on("connection", ws => {
 
     if (m.type === "pos") {
       if(room.state!=="racing" || p.finished || ![m.x,m.y,m.angle,m.prog,m.lap].every(Number.isFinite) || !Number.isInteger(m.lap) || m.lap<1 || m.lap>LAPS+1) return;
-      p.x = m.x; p.y = m.y; p.angle = m.angle; p.prog = m.prog; p.boost = false;
+      p.x = m.x; p.y = m.y; p.angle = m.angle; p.prog = m.prog; p.boost = false; p.rainbow = !!m.rainbow;
+      if (!room.rainbow && p.lap >= 4) beginRainbow(room);
       if (m.lap !== p.lap) { p.lap = m.lap; if (p.lap > LAPS) handleFinish(room, p); }
       return;
     }
