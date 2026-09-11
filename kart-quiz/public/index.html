@@ -378,10 +378,10 @@ function enterRainbowTrack(players){
   boxes.fill(true);rainbowMode=true;rainbowRising=false;rainbowProgress=0;cardOpen=false;
   const roster=players||[];
   for(const p of roster){
-    if(p.id===me.id){car.x=p.x;car.y=p.y;car.angle=p.angle;car.lap=4;}
-    else {const o=others.get(p.id);if(o){o.x=o.tx=p.x;o.y=o.ty=p.y;o.angle=o.tangle=p.angle;o.lap=4;o.prog=0;o.rainbow=true;}}
+    if(p.id===me.id){car.x=p.x;car.y=p.y;car.angle=p.angle;car.lap=7;}
+    else {const o=others.get(p.id);if(o){o.x=o.tx=p.x;o.y=o.ty=p.y;o.angle=o.tangle=p.angle;o.lap=7;o.prog=0;o.rainbow=true;}}
   }
-  if(!roster.length){car.x=RAIN_PATH[0][0]+rainbowOx;car.y=RAIN_PATH[0][1]+rainbowOz;car.angle=0;car.lap=4;}
+  if(!roster.length){car.x=RAIN_PATH[0][0]+rainbowOx;car.y=RAIN_PATH[0][1]+rainbowOz;car.angle=0;car.lap=7;}
   car.speed=0;car.idx=0;car.stun=0;car.hitUntil=0;
   const near=nearestRainbowPoint(car.x,car.y);car.rainbowY=rainbowHeight(near.idx+near.t);
   camGoal();camera.position.copy(camTarget);camera.lookAt(lookTarget);
@@ -402,7 +402,7 @@ function stepRainbow(dt){
   }
   rainbowProgress=Math.max(rainbowProgress,near.idx);car.rainbowY=rainbowHeight(near.idx+near.t);
   for(const g of ghostObstacles){const gi=g.userData.trackIndex;g.position.y=rainbowHeight(gi)+34+Math.sin(now/300+g.userData.phase)*7;const dx=g.position.x+rainbowOx-car.x,dz=g.position.z+rainbowOz-car.y;if(Math.hypot(dx,dz)<32){car.speed=Math.max(1.1,car.speed-.7);car.hit=now;}g.rotation.y+=.02*dt;}
-  if(near.idx>=RAIN_N-2&&car.speed>0){car.lap=6;car.finished=true;sendMsg({type:'pos',x:car.x,y:car.y,angle:car.angle,lap:6,prog:RAIN_N-1,rainbow:true});}
+  if(near.idx>=RAIN_N-2&&car.speed>0){car.lap=9;car.finished=true;sendMsg({type:'pos',x:car.x,y:car.y,angle:car.angle,lap:9,prog:RAIN_N-1,rainbow:true});}
 }
 
 // faixa (strip) genérica ao longo da pista: fa(i), fb(i) devolvem [x, y, z]; colorFn(i) devolve cor hex por segmento

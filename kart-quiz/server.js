@@ -9,7 +9,7 @@ const { WebSocketServer } = require("ws");
 const QUESTIONS = require("./questions");
 
 const PORT = process.env.PORT || 3000;
-const LAPS = 5;
+const LAPS = 8;
 const QUESTION_TIME = 12000;       // ms para responder a carta
 const QUESTION_INTERVAL = 15000;   // ms entre uma carta e outra
 const BOX_RESPAWN = 8000;          // ms até a caixa voltar
@@ -98,7 +98,7 @@ function beginRainbow(room) {
     let slot=0;
     for(const p of room.players.values()){
       const i=24-Math.floor(slot/4)*3,t=i/320,x=t*12800,z=420*Math.sin(t*Math.PI*2)-180*Math.sin(t*Math.PI*4),h=Math.atan2(840*Math.PI*Math.cos(t*Math.PI*2)-720*Math.PI*Math.cos(t*Math.PI*4),12800),off=(slot%4-1.5)*55;
-      p.x=x-Math.sin(h)*off;p.y=-3200+z+Math.cos(h)*off;p.angle=h;p.lap=4;p.prog=i;p.rainbow=true;slot++;
+      p.x=x-Math.sin(h)*off;p.y=-3200+z+Math.cos(h)*off;p.angle=h;p.lap=7;p.prog=i;p.rainbow=true;slot++;
     }
     broadcast(room, { type: "rainbow_start", players:playerList(room) });
     room.cardTimer = setInterval(() => { if (room.state === "racing" && room.rainbow && !room.question) openQuestion(room); }, QUESTION_INTERVAL);
@@ -205,7 +205,7 @@ wss.on("connection", ws => {
       if(room.state!=="racing" || room.transition || (room.rainbow && !m.rainbow) || p.finished || ![m.x,m.y,m.angle,m.prog,m.lap].every(Number.isFinite) || !Number.isInteger(m.lap) || m.lap<1 || m.lap>LAPS+1) return;
       p.x = m.x; p.y = m.y; p.angle = m.angle; p.prog = m.prog; p.boost = false; p.rainbow = !!m.rainbow;
       if (m.lap !== p.lap) { p.lap = m.lap; if (p.lap > LAPS) handleFinish(room, p); }
-      if (!room.rainbow && p.lap >= 4) beginRainbow(room);
+      if (!room.rainbow && p.lap >= 7) beginRainbow(room);
       return;
     }
 
