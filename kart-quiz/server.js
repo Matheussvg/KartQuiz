@@ -94,9 +94,10 @@ function beginRainbow(room) {
   setTimeout(() => {
     if (room.state !== "racing" || room.round!==round) return;
     room.rainbow = true; room.transition = false;
+    for (const b of room.boxes) b.available = true;
     let slot=0;
     for(const p of room.players.values()){
-      const i=24-Math.floor(slot/4)*3,t=i/320,x=t*6400,z=420*Math.sin(t*Math.PI*2)-180*Math.sin(t*Math.PI*4),h=Math.atan2(840*Math.PI*Math.cos(t*Math.PI*2)-720*Math.PI*Math.cos(t*Math.PI*4),6400),off=(slot%4-1.5)*55;
+      const i=24-Math.floor(slot/4)*3,t=i/320,x=t*12800,z=420*Math.sin(t*Math.PI*2)-180*Math.sin(t*Math.PI*4),h=Math.atan2(840*Math.PI*Math.cos(t*Math.PI*2)-720*Math.PI*Math.cos(t*Math.PI*4),12800),off=(slot%4-1.5)*55;
       p.x=x-Math.sin(h)*off;p.y=-3200+z+Math.cos(h)*off;p.angle=h;p.lap=4;p.prog=i;p.rainbow=true;slot++;
     }
     broadcast(room, { type: "rainbow_start", players:playerList(room) });
@@ -127,6 +128,7 @@ function closeQuestion(room) {
   broadcast(room, { type: "question_end", correct: qs.q.options[qs.q.answer] });
 }
 
+const RAINBOW_POWERS = ['meteor', 'magnet', 'nebula'];
 const POWERS = ['lightning', 'shield', 'ice', 'pulse'];
 function normalizeStyle(v) {
   v=v && typeof v==='object'?v:{};
@@ -142,13 +144,14 @@ function useItem(room,p) {
   }
   const score=x=>x.lap*100000+x.prog;
   let targets=[...room.players.values()].filter(x=>x!==p&&!x.finished);
-  if(power==='pulse') targets=targets.filter(x=>Math.hypot(x.x-p.x,x.y-p.y)<=180);
+  if(power==='pulse'||power==='nebula') targets=targets.filter(x=>Math.hypot(x.x-p.x,x.y-p.y)<=180);
   else targets=targets.filter(x=>score(x)>score(p)).sort((a,b)=>score(a)-score(b)).slice(0,1);
   broadcast(room,{type:'power',power,id:p.id,x:p.x,y:p.y,targets:targets.map(x=>({id:x.id,x:x.x,y:x.y}))});
   if(!targets.length) return send(p.ws,{type:'item_miss'});
   for(const target of targets) {
     if(target.shieldUntil>now) {target.shieldUntil=0;broadcast(room,{type:'blocked',id:target.id,x:target.x,y:target.y});continue;}
-    if(power==='ice') {target.iceUntil=now+3000;broadcast(room,{type:'iced',id:target.id,until:target.iceUntil});}
+    if(power==='magnet') {broadcast(room,{type:'rewind',id:target.id});}
+    else if(power==='ice'||power==='nebula') {target.iceUntil=now+3000;broadcast(room,{type:'iced',id:target.id,until:target.iceUntil});}
     else broadcast(room,{type:'hit',id:target.id,name:target.name,by:p.name,duration:power==='pulse'?800:HIT_TIME});
   }
 }
@@ -209,7 +212,7 @@ wss.on("connection", ws => {
     if (m.type === "pickup" && room.state === "racing" && !p.finished) {
       const b = room.boxes[m.idx];
       if (!b || !b.available || p.item) return;
-      b.available = false; p.item = POWERS[Math.floor(Math.random()*POWERS.length)];
+      b.available = false; p.item = (room.rainbow ? RAINBOW_POWERS : POWERS)[Math.floor(Math.random()*(room.rainbow ? RAINBOW_POWERS : POWERS).length)];
       broadcast(room, { type: "box", idx: m.idx, available: false });
       send(ws, { type: "item", power:p.item });
       const round=room.round; setTimeout(() => { if(room.round!==round || room.state!=="racing") return; b.available = true; broadcast(room, { type: "box", idx: m.idx, available: true }); }, BOX_RESPAWN);

@@ -178,6 +178,7 @@ let others = new Map();
 let phase = "lobby";
 let boxes = Array(9).fill(true);
 let question = null;
+let rainbowBoxes=[];
 let rainbowMode = false, rainbowRising = false, rainbowRiseStart = 0, rainbowProgress = 0, rainbowGroup = null, ghostObstacles = [], rainbowOx = 0, rainbowOz = 0;
 
 ws.onclose = () => {phase="disconnected"; const e=document.createElement("div");e.textContent="Conexão perdida. Recarregue a página.";e.style="position:fixed;top:0;left:0;right:0;z-index:30;background:#852b3b;padding:16px;text-align:center";document.body.appendChild(e);};
@@ -199,6 +200,7 @@ ws.onmessage = ev => {
     case "customized": me.style=m.style;me.color=m.color;break;
     case "power": powerEffect(m);break;
     case "blocked": {const p=m.id===me.id?car:others.get(m.id);if(p)p.shieldUntil=0;burst(m.x,m.y,0x66eeff);if(m.id===me.id)flash("Escudo bloqueou o ataque!");break;}
+    case "rewind": if(m.id===me.id){pushBack();flash("O ímã puxou você para trás!");} break;
     case "iced": {const p=m.id===me.id?car:others.get(m.id);if(p)p.iceUntil=m.until;if(m.id===me.id)flash("Congelado por 3 segundos!");break;}
     case "item_miss": flash("Nenhum alvo ao alcance!"); break;
     case "hit": onHit(m); break;
@@ -301,7 +303,7 @@ ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground)
 // Segunda fase: ponte de arco-íris suspensa no céu, com estrelas e fantasmas.
 // Broad bends keep the 270-unit deck from folding over itself.
 const RAIN_N = 321, RAIN_PATH = Array.from({length:RAIN_N},(_,i)=>{
-  const t=i/(RAIN_N-1); return [t*6400,420*Math.sin(t*Math.PI*2)-180*Math.sin(t*Math.PI*4)];
+  const t=i/(RAIN_N-1); return [t*12800,420*Math.sin(t*Math.PI*2)-180*Math.sin(t*Math.PI*4)];
 });
 function rainbowHeight(i){const t=Math.max(0,Math.min(1,i/(RAIN_N-1)));return 180+160*Math.sin(Math.PI*t)**2+55*Math.sin(3*Math.PI*t)**2;}
 function rainPoint(i,off=0,lift=0){
@@ -310,9 +312,17 @@ function rainPoint(i,off=0,lift=0){
   return new THREE.Vector3(p[0]-dz/len*off,rainbowHeight(i)+lift,p[1]+dx/len*off);
 }
 function makeRainbowTrack(){
+  rainbowBoxes=[];
   rainbowGroup=new THREE.Group();scene.add(rainbowGroup);ghostObstacles=[];
   // Shared world origin also keeps multiplayer racers on the same bridge.
   rainbowOx=0;rainbowOz=-3200;rainbowGroup.position.set(rainbowOx,0,rainbowOz);
+  for(const fraction of [.25,.52,.79]) for(const off of [-64,0,64]) {
+    const i=Math.floor((RAIN_N-1)*fraction);
+    const m=new THREE.Mesh(new THREE.BoxGeometry(20,20,20),prismMaterials.map(mat=>{const copy=mat.clone();copy.map=mat.map.clone();return copy;}));
+    m.position.copy(rainPoint(i,off,16));m.userData.baseY=m.position.y;
+    rainbowGroup.add(m);rainbowBoxes.push(m);
+  }
+
   const colors=[0xff467f,0xffa43a,0xffe45b,0x64ed97,0x43dcff,0x6377ff,0xcf6aff];
   function ribbon(a,b,ya,yb,mat){
     const pos=[],idx=[];for(let i=0;i<RAIN_N;i++)pos.push(...rainPoint(i,a,ya).toArray(),...rainPoint(i,b,yb).toArray());
@@ -365,7 +375,7 @@ function makeRainbowTrack(){
 function showRainbowWarning(title){cardOpen=true;const e=$("#trackEvent");e.classList.remove('hidden');$('#trackEventTitle').firstChild.textContent=title;$('#trackEventSub').textContent='Portal aberto — todos serão teleportados para a Estrada Celeste';setTimeout(()=>{if(e)e.classList.add('hidden');},4800);}
 function enterRainbowTrack(players){
   clearEffects();makeRainbowTrack();originalWorld.visible=false;
-  rainbowMode=true;rainbowRising=false;rainbowProgress=0;cardOpen=false;
+  boxes.fill(true);rainbowMode=true;rainbowRising=false;rainbowProgress=0;cardOpen=false;
   const roster=players||[];
   for(const p of roster){
     if(p.id===me.id){car.x=p.x;car.y=p.y;car.angle=p.angle;car.lap=4;}
@@ -385,6 +395,11 @@ function stepRainbow(dt){
   car.x+=Math.cos(car.angle)*car.speed*dt;car.y+=Math.sin(car.angle)*car.speed*dt;
   const near=nearestRainbowPoint(car.x,car.y),limit=101;
   if(near.dist>limit){const dx=(car.x-near.x)/near.dist,dz=(car.y-near.z)/near.dist;car.x=near.x+dx*limit;car.y=near.z+dz*limit;const h=Math.atan2(RAIN_PATH[Math.min(RAIN_N-1,near.idx+1)][1]-RAIN_PATH[near.idx][1],RAIN_PATH[Math.min(RAIN_N-1,near.idx+1)][0]-RAIN_PATH[near.idx][0]);const d=Math.atan2(Math.sin(h-car.angle),Math.cos(h-car.angle));car.angle+=d*.3;}
+  if(Date.now()<car.iceUntil)car.speed=Math.min(car.speed,2.1);
+  for(let b=0;b<rainbowBoxes.length;b++){
+    const box=rainbowBoxes[b];
+    if(boxes[b]&&!car.item&&Math.hypot(box.position.x+rainbowOx-car.x,box.position.z+rainbowOz-car.y)<26){boxes[b]=false;sendMsg({type:'pickup',idx:b});}
+  }
   rainbowProgress=Math.max(rainbowProgress,near.idx);car.rainbowY=rainbowHeight(near.idx+near.t);
   for(const g of ghostObstacles){const gi=g.userData.trackIndex;g.position.y=rainbowHeight(gi)+34+Math.sin(now/300+g.userData.phase)*7;const dx=g.position.x+rainbowOx-car.x,dz=g.position.z+rainbowOz-car.y;if(Math.hypot(dx,dz)<32){car.speed=Math.max(1.1,car.speed-.7);car.hit=now;}g.rotation.y+=.02*dt;}
   if(near.idx>=RAIN_N-2&&car.speed>0){car.lap=6;car.finished=true;sendMsg({type:'pos',x:car.x,y:car.y,angle:car.angle,lap:6,prog:RAIN_N-1,rainbow:true});}
@@ -506,7 +521,7 @@ function beginRace(players) {
 }
 
 function pushBack() {
-  if(rainbowMode){const n=nearestRainbowPoint(car.x,car.y),i=Math.max(0,n.idx-6);car.x=RAIN_PATH[i][0]+rainbowOx;car.y=RAIN_PATH[i][1]+rainbowOz;car.rainbowY=rainbowHeight(i);car.angle=Math.atan2(RAIN_PATH[i+1][1]-RAIN_PATH[i][1],RAIN_PATH[i+1][0]-RAIN_PATH[i][0]);car.speed=0;car.stun=performance.now()+600;return;}
+  if(rainbowMode){const n=nearestRainbowPoint(car.x,car.y),i=Math.max(0,n.idx-6);car.x=RAIN_PATH[i][0]+rainbowOx;car.y=RAIN_PATH[i][1]+rainbowOz;rainbowProgress=i;car.rainbowY=rainbowHeight(i);car.angle=Math.atan2(RAIN_PATH[i+1][1]-RAIN_PATH[i][1],RAIN_PATH[i+1][0]-RAIN_PATH[i][0]);car.speed=0;car.stun=performance.now()+600;return;}
 
   const i = (car.idx - 6 + N) % N;
   car.x = PATH[i][0]; car.y = PATH[i][1]; car.angle = headingAt(i); car.speed = 0; car.idx = i; car.stun = performance.now() + 600;
@@ -651,7 +666,7 @@ const MB = (() => { const xs = PATH.map(p => p[0]), ys = PATH.map(p => p[1]); co
 function drawMini() {
   mini.clearRect(0, 0, 192, 120);
   if(rainbowMode){
-    const project=(x,z)=>[10+(x-rainbowOx)/6400*172,60+(z-rainbowOz)/1600*90];
+    const project=(x,z)=>[10+(x-rainbowOx)/12800*172,60+(z-rainbowOz)/1600*90];
     mini.lineWidth=7;mini.strokeStyle='#b58aff';mini.beginPath();RAIN_PATH.forEach(([x,z],i)=>{const p=project(x+rainbowOx,z+rainbowOz);if(i)mini.lineTo(...p);else mini.moveTo(...p);});mini.stroke();
     for(const p of [...others.values(),car]){const q=project(p.x,p.y);mini.fillStyle=p===car?'#ffffff':p.color;mini.beginPath();mini.arc(...q,p===car?4:3,0,Math.PI*2);mini.fill();}return;
   }
@@ -686,13 +701,29 @@ function resize() {
 }
 addEventListener("resize", resize);
 
-const POWER_INFO={lightning:['⚡','Raio','derruba o próximo piloto'],shield:['◈','Escudo','protege por 8s ou um ataque'],ice:['❄','Gelo','desacelera o próximo por 3s'],pulse:['◎','Onda de choque','atinge pilotos próximos']};
+const POWER_INFO={meteor:['☄','Meteoro','atinge o próximo piloto'],magnet:['🧲','Ímã','puxa o próximo para trás'],nebula:['✺','Nebulosa','desacelera pilotos próximos por 3s'],lightning:['⚡','Raio','derruba o próximo piloto'],shield:['◈','Escudo','protege por 8s ou um ataque'],ice:['❄','Gelo','desacelera o próximo por 3s'],pulse:['◎','Onda de choque','atinge pilotos próximos']};
 const effects=[];
 function addEffect(mesh,life,kind,v){scene.add(mesh);effects.push({mesh,life,total:life,kind,v});}
 function burst(x,z,color){for(let i=0;i<18;i++){const a=i/18*Math.PI*2,m=new THREE.Mesh(new THREE.OctahedronGeometry(1.7),new THREE.MeshBasicMaterial({color,transparent:true}));m.position.set(x,12,z);addEffect(m,42,'spark',{x:Math.cos(a)*1.4,z:Math.sin(a)*1.4});}}
 function clearEffects(){for(const e of effects){scene.remove(e.mesh);e.mesh.geometry.dispose();e.mesh.material.dispose();}effects.length=0;}
 function powerEffect(m){
  const player=m.id===me.id?car:others.get(m.id);
+ if(['meteor','magnet','nebula'].includes(m.power)){
+   const color={meteor:0xff7733,magnet:0xff44cc,nebula:0x9966ff}[m.power];
+   const height=(x,z)=>rainbowMode?rainbowHeight(nearestRainbowPoint(x,z).idx):0;
+   if(m.power==='nebula'){
+     const ring=new THREE.Mesh(new THREE.TorusGeometry(1,.06,6,64),new THREE.MeshBasicMaterial({color,transparent:true}));ring.rotation.x=Math.PI/2;ring.position.set(m.x,height(m.x,m.y)+10,m.y);addEffect(ring,38,'pulse');
+   }
+   for(const t of m.targets||[]){
+     if(m.power==='meteor'){
+       const orb=new THREE.Mesh(new THREE.IcosahedronGeometry(12,1),new THREE.MeshBasicMaterial({color,transparent:true}));orb.position.set(t.x,height(t.x,t.y)+180,t.y);addEffect(orb,32,'meteor');
+     }else if(m.power==='magnet'){
+       const pts=[new THREE.Vector3(m.x,height(m.x,m.y)+20,m.y),new THREE.Vector3(t.x,height(t.x,t.y)+20,t.y)];
+       addEffect(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color,transparent:true})),40,'magnet');
+     }
+   }return;
+ }
+
  if(m.power==='shield'){if(player)player.shieldUntil=m.until;burst(m.x,m.y,0x66eeff);return;}
  if(m.power==='lightning'){
  const origin=player?.mesh?.position; const sx=origin?origin.x:m.x,sz=origin?origin.z:m.y;
@@ -712,7 +743,7 @@ function powerEffect(m){
   }
  }
 }
-function updateEffects(dt){for(let i=effects.length-1;i>=0;i--){const e=effects[i];e.life-=dt;const f=Math.max(0,e.life/e.total);e.mesh.material.opacity=f;if(e.kind==='launch')e.mesh.geometry.setDrawRange(0,Math.min(25,2+Math.floor((1-f)*65)));if(e.kind==='muzzle')e.mesh.scale.setScalar(1+(1-f)*2);if(e.kind==='pulse')e.mesh.scale.setScalar(1+(1-f)*180);if(e.kind==='spark'){e.mesh.position.x+=e.v.x*dt;e.mesh.position.z+=e.v.z*dt;e.mesh.position.y+=.35*dt;e.mesh.rotation.x+=.1*dt;}if(e.kind==='orb'){e.mesh.position.x=e.v.sx+(e.v.tx-e.v.sx)*(1-f);e.mesh.position.z=e.v.sz+(e.v.tz-e.v.sz)*(1-f);e.mesh.rotation.y+=dt*.2;}if(e.life<=0){scene.remove(e.mesh);e.mesh.geometry.dispose();e.mesh.material.dispose();effects.splice(i,1);}}}
+function updateEffects(dt){for(let i=effects.length-1;i>=0;i--){const e=effects[i];e.life-=dt;if(e.kind==='meteor')e.mesh.position.y-=5*dt;const f=Math.max(0,e.life/e.total);e.mesh.material.opacity=f;if(e.kind==='launch')e.mesh.geometry.setDrawRange(0,Math.min(25,2+Math.floor((1-f)*65)));if(e.kind==='muzzle')e.mesh.scale.setScalar(1+(1-f)*2);if(e.kind==='pulse')e.mesh.scale.setScalar(1+(1-f)*180);if(e.kind==='spark'){e.mesh.position.x+=e.v.x*dt;e.mesh.position.z+=e.v.z*dt;e.mesh.position.y+=.35*dt;e.mesh.rotation.x+=.1*dt;}if(e.kind==='orb'){e.mesh.position.x=e.v.sx+(e.v.tx-e.v.sx)*(1-f);e.mesh.position.z=e.v.sz+(e.v.tz-e.v.sz)*(1-f);e.mesh.rotation.y+=dt*.2;}if(e.life<=0){scene.remove(e.mesh);e.mesh.geometry.dispose();e.mesh.material.dispose();effects.splice(i,1);}}}
 function animateKart(mesh,p,now,dt){mesh.userData.shield.visible=Date.now()<p.shieldUntil;mesh.userData.shield.scale.setScalar(1+Math.sin(now/180)*.025);mesh.userData.ice.visible=Date.now()<p.iceUntil;mesh.userData.ice.rotation.y=now/700;if(phase==='racing'&&!cardOpen&&!p.finished){const speed=p===car?car.speed:Math.hypot(p.tx-p.x,p.ty-p.y);for(const w of mesh.userData.wheels)w.rotation.z-=speed*dt*.09;}}
 
 let last = performance.now();
@@ -736,6 +767,7 @@ function frame(now) {
     camera.position.lerp(camTarget, 0.12);
     camera.lookAt(lookTarget);
     const fovGoal = 60; camera.fov += (fovGoal - camera.fov) * 0.1; camera.updateProjectionMatrix();
+    for(let b=0;b<rainbowBoxes.length;b++){const m=rainbowBoxes[b];m.visible=rainbowMode&&boxes[b];m.rotation.y=now/800;m.rotation.x=now/1300;m.position.y=m.userData.baseY+Math.sin(now/300+b)*2;}
     updateEffects(dt);renderer.render(scene, camera);
     drawMini(); hud(now);
   }
